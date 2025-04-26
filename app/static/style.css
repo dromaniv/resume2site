@@ -1,0 +1,100 @@
+/* :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: *
+   PRESENTATION LAYER – nice-looking but still plain CSS
+ * :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: */
+
+ :root {
+    --fg: #222;          /* primary text */
+    --muted: #666;       /* light text */
+    --accent: #3E7BFA;   /* links, headings */
+    --bg: #f5f7ff;       /* page background */
+    --card-bg: #fff;     /* card surface */
+    --radius: 12px;
+    --shadow: 0 2px 6px rgb(0 0 0 / .07);
+    --badge-bg: #E7EEFF;
+  }
+  
+  html { font-size: 16px; line-height: 1.55; }
+  
+  body {
+    margin: 0 auto;
+    max-width: 900px;
+    padding: 2.5rem 1.2rem 4rem;
+    font-family: "Inter", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+  }
+  
+  /* ----------  HEADER  ---------- */
+  .hero {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(135deg, #437bff 0%, #6b9aff 100%);
+    color: #fff;
+    padding: 1.6rem 2rem;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 2.2rem;
+  }
+  
+  .hero__name { margin: 0; }
+  h1 { margin: 0; font-size: 2.3rem; letter-spacing: -0.5px; }
+  .headline { margin: .25rem 0 0; color: rgba(255,255,255,.85); }
+  
+  .hero__contact a,
+  .hero__contact span {
+    margin-left: 1.1rem;
+    font-size: .9rem;
+    color: #fff;
+    text-decoration: none;
+  }
+  .hero__contact a:hover { text-decoration: underline; }
+  
+  /* ----------  SECTIONS  ---------- */
+  main { display: grid; gap: 1.7rem; }
+  
+  .card {
+    background: var(--card-bg);
+    padding: 1.5rem 2rem;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+  
+  .card h2 {
+    margin-top: 0;
+    color: var(--accent);
+    letter-spacing: -0.3px;
+  }
+  
+  .item { margin-top: 1.3rem; }
+  
+  .meta {
+    color: var(--muted);
+    font-size: .85rem;
+    margin: .1rem 0 .4rem;
+  }
+  
+  /* ----------  LISTS  ---------- */
+  ul { padding-left: 1.2rem; margin: .4rem 0; }
+  li { margin-bottom: .25rem; }
+  
+  /* ----------  SKILL BADGES  ---------- */
+  .skill-cat { margin: 1rem 0 .4rem; font-size: 1rem; }
+  .badge {
+    display: inline-block;
+    background: var(--badge-bg);
+    color: var(--accent);
+    padding: .25rem .55rem;
+    margin: .2rem .3rem;
+    font-size: .85rem;
+    border-radius: var(--radius);
+  }
+  
+  /* ----------  FOOTER  ---------- */
+  footer {
+    text-align: center;
+    font-size: .8rem;
+    color: var(--muted);
+    margin-top: 3rem;
+  }

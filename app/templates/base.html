@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ r.name }}</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#3E7BFA">
+  {% if inline_css %}
+    <style>{{ inline_css }}</style>
+  {% else %}
+    <link rel="stylesheet" href="static/style.css">
+  {% endif %}
+</head>
+<body>
+  <!-- ╔═══════════════════  HEADER  ═════════════════╗ -->
+  <header class="hero">
+    <div class="hero__name">
+      <h1>{{ r.name }}</h1>
+      {% if r.headline %}<p class="headline">{{ r.headline }}</p>{% endif %}
+    </div>
+
+    <div class="hero__contact">
+      {% if r.contact.email %}<a href="mailto:{{ r.contact.email }}">{{ r.contact.email }}</a>{% endif %}
+      {% if r.contact.phone %}<span>{{ r.contact.phone }}</span>{% endif %}
+      {% if r.contact.github %}<a href="{{ r.contact.github }}">GitHub</a>{% endif %}
+      {% if r.contact.linkedin %}<a href="{{ r.contact.linkedin }}">LinkedIn</a>{% endif %}
+    </div>
+  </header>
+
+  <main>
+    {% if r.summary %}
+    <section class="card">
+      <h2>Summary</h2>
+      <p>{{ r.summary }}</p>
+    </section>
+    {% endif %}
+
+    <!-- EXPERIENCE -->
+    <section class="card">
+      <h2>Experience</h2>
+      {% for job in r.experience %}
+        <article class="item">
+          <h3>{{ job.title }}{% if job.company %} – {{ job.company }}{% endif %}</h3>
+          <p class="meta">{{ job.location }} • {{ job.start }} – {{ job.end }}</p>
+          <ul>{% for b in job.bullets %}<li>{{ b }}</li>{% endfor %}</ul>
+        </article>
+      {% endfor %}
+    </section>
+
+    <!-- EDUCATION -->
+    <section class="card">
+      <h2>Education</h2>
+      {% for ed in r.education %}
+        <article class="item">
+          <h3>{{ ed.degree }}</h3>
+          <p class="meta">{{ ed.school }} • {{ ed.start }} – {{ ed.end }}</p>
+          <ul>{% for b in ed.bullets %}<li>{{ b }}</li>{% endfor %}</ul>
+        </article>
+      {% endfor %}
+    </section>
+
+    <!-- SKILLS -->
+    <section class="card">
+      <h2>Skills</h2>
+      {% for cat, lst in r.skills.items() if lst %}
+        <h3 class="skill-cat">{{ cat|capitalize }}</h3>
+        <p>
+          {% for sk in lst %}
+            <span class="badge">{{ sk }}</span>
+          {% endfor %}
+        </p>
+      {% endfor %}
+    </section>
+
+    <!-- PROJECTS -->
+    {% if r.projects %}
+    <section class="card">
+      <h2>Projects</h2>
+      {% for p in r.projects %}
+        <article class="item">
+          {% if p.url %}
+            <h3><a href="{{ p.url }}">{{ p.title }}</a></h3>
+          {% else %}
+            <h3>{{ p.title }}</h3>
+          {% endif %}
+          {% if p.bullets %}
+            <ul>{% for b in p.bullets %}<li>{{ b }}</li>{% endfor %}</ul>
+          {% endif %}
+        </article>
+      {% endfor %}
+    </section>
+    {% endif %}
+  </main>
+
+  <footer>
+    <p>Generated with <strong>Résumé-to-Site</strong></p>
+  </footer>
+</body>
+</html>
