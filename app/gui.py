@@ -3,8 +3,8 @@ from pathlib import Path
 from extractor import pdf_to_text
 from parser_llm import parse_resume_llm
 from generator_llm import generate_html_llm 
+from generator_rule import json_to_html # Changed from 'generator' to 'generator_rule'
 from parser_rule import parse_resume_rule
-from generator import json_to_html
 
 st.set_page_config(page_title="Résumé-to-Site", layout="wide")
 st.title("📄 → 🌐 Résumé-to-Site")
@@ -12,7 +12,8 @@ st.title("📄 → 🌐 Résumé-to-Site")
 # Updated radio button options
 parser_mode = st.radio(
     "Choose generation mode",
-    ["LLM (JSON + Template)", "Rule-based (JSON + Template)", "LLM (Direct HTML)"]
+    options=["LLM (Direct HTML)", "LLM (JSON + Template)", "Rule-based (JSON + Template)"], # Reordered options
+    index=0  # Set "LLM (Direct HTML)" as default
 )
 pdf_file = st.file_uploader("Upload PDF résumé", type="pdf")
 
@@ -23,7 +24,6 @@ if pdf_file:
 
     with st.spinner("Extracting text from PDF..."):
         raw_text = pdf_to_text(pdf_path)
-    st.success("✅ PDF text extracted successfully!")
 
     if parser_mode == "LLM (Direct HTML)":
         st.subheader("LLM-Generated HTML Website")
@@ -59,7 +59,7 @@ if pdf_file:
         if parser_mode.startswith("LLM"):
             with st.status("Processing with LLM (JSON + Template)...", expanded=True) as status_container:
                 status_container.update(label="🤖 Calling LLM to parse resume into JSON...")
-                data = parse_resume_llm(raw_text) # Assuming parse_resume_llm doesn't have callback yet
+                data = parse_resume_llm(raw_text) 
                 status_container.update(label="✅ Resume parsed to JSON.", state="complete")
         else: # Rule-based
             with st.status("Processing with Rule-based parser...", expanded=True) as status_container:
@@ -72,12 +72,14 @@ if pdf_file:
             st.json(data)
 
             with st.spinner("🎨 Rendering HTML from template..."):
+                # Ensure this call uses the renamed generator_rule.json_to_html
                 html_inline_template = json_to_html(data, inline=True)
             st.success("✅ HTML rendered from template!")
 
             st.subheader("Preview (Template-based)")
             st.components.v1.html(html_inline_template, height=900, scrolling=True)
 
+            # Ensure this call uses the renamed generator_rule.json_to_html
             html_file_template = json_to_html(data, inline=False)
             st.download_button(
                 "Download index_template.html",

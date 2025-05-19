@@ -29,9 +29,11 @@ def expand_username_url(token: str, domain: str) -> str:
         return token
     return f"https://{domain}/{token.lstrip('@').split('/')[-1]}" if token else ""
 
-def _sentences(raw: str) -> List[str]:
+def _sentences(raw: str | list[str]) -> List[str]: # Allow list of strings as input
     """Turn long description into bullet sentences."""
-    bits = re.split(r"[•\u2022\-–]\s*|\.\s+", raw.strip())
+    if isinstance(raw, list):
+        raw = " ".join(raw) # Join list elements into a single string
+    bits = re.split(r"[•\u2022\-–]\s*|\.\s+", (raw or "").strip()) # Ensure raw is not None before stripping
     return [decamel(x) for x in bits if x]
 
 # ───────────────────────────────────────── cleaner ──
@@ -50,8 +52,10 @@ def clean_resume(r: Dict[str, Any]) -> Dict[str, Any]:
         j["location"] = decamel(j.get("location", ""))
         j["start"]    = j.pop("start", j.pop("startDate", ""))
         j["end"]      = j.pop("end",   j.pop("endDate",   ""))
-        if "description" in j and not j.get("bullets"):
-            j["bullets"] = _sentences(j.pop("description"))
+        description = j.pop("description", None) # Pop description
+        if description and not j.get("bullets"):
+            j["bullets"] = _sentences(description) # Pass it to _sentences
+            
 
     # education
     for e in r.get("education", []):
