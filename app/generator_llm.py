@@ -34,6 +34,7 @@ _PLAN_CACHE_DIR = _PROJECT_ROOT / ".cache" / "plans" # Cache for plans
 _HTML_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 _PLAN_CACHE_DIR.mkdir(parents=True, exist_ok=True) # Create plan cache directory
 _MAX_FIX_ATTEMPTS = 2 # Maximum attempts to fix HTML/CSS issues
+_MAX_VISUAL_TWEAK_ATTEMPTS = 1 # Maximum attempts for visual tweaks
 
 _SYSTEM_PROMPT_PLAN = textwrap.dedent(f"""\
 You are an expert resume analyst and web strategist.
@@ -128,6 +129,27 @@ Instructions:
 5.  Do NOT include any markdown fences (like \\`\\`\\`html) or any other text, comments, or explanations outside the HTML itself.
 """)
 
+_SYSTEM_PROMPT_VISUAL_TWEAKS = textwrap.dedent(f"""\
+You are an expert web designer. You previously generated an HTML website that is structurally valid,
+but it could be improved for visual clarity and aesthetics based on the following suggestions.
+
+Original Résumé Text (for context, do not regenerate from this, only tweak the HTML):\n{{{{resume_text}}}}
+
+Website Plan (for context):\n{{{{website_plan}}}}
+
+Current HTML:\n```html\n{{{{current_html}}}}\n```
+
+Visual Improvement Suggestions:\n```\n{{{{visual_feedback}}}}\n```
+
+Instructions:\n
+1.  Carefully review the visual improvement suggestions.
+2.  Modify the `current_html` to address these suggestions. Focus on CSS adjustments (within `<style>` tags or inline styles) or minor HTML structural changes if necessary to improve layout, spacing, readability, and overall visual appeal.
+3.  Do NOT significantly alter the content or the core structure defined by the website plan.
+4.  Ensure all CSS is in `<style>` tags or inline, and all JS is in `<script>` tags.
+5.  The output should be the complete, tweaked HTML code, starting with `<!DOCTYPE html>` and ending with `</html>`.
+6.  Do NOT include any markdown fences (like \\\\`\\\\`\\\\`html) or any other text, comments, or explanations outside the HTML itself.
+""")
+
 def _extract_html(raw_html_output: str) -> str:
     """
     Extracts HTML content from the LLM's raw output.
@@ -207,6 +229,113 @@ def _validate_html_css(html_content: str) -> list[str]:
             
     return errors
 
+def _analyze_visual_clarity(html_content: str) -> list[str]:
+    """
+    Performs a heuristic analysis of the HTML for potential visual clarity issues.
+    Returns a list of textual feedback/suggestions.
+    """
+    feedback = []
+    soup = BeautifulSoup(html_content, 'html.parser')
+
+    # 1. Check for viewport meta tag
+    if not soup.find("meta", attrs={"name": "viewport"}):
+        feedback.append("Consider adding a viewport meta tag for responsiveness: <meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1.0\\\">.")
+
+    # 2. Basic font size check (very simplified)
+    body_style = soup.body.get('style', '') if soup.body else ''
+    style_tags = soup.find_all('style')
+    
+    body_font_size = None
+    # Check inline style on body
+    if 'font-size' in body_style:
+        match = re.search(r'font-size:\\s*(\\d+)px', body_style)
+        if match:
+            body_font_size = int(match.group(1))
+    
+    # Check style tags for body font-size (simplified: looks for 'body {' and 'font-size')
+    if not body_font_size:
+        for tag in style_tags:
+            if tag.string:
+                if 'body {' in tag.string and 'font-size' in tag.string:
+                    match = re.search(r'body\\s*{[^}]*font-size:\\s*(\\d+)px', tag.string, re.DOTALL)
+                    if match:
+                        body_font_size = int(match.group(1))
+                        break
+    
+    if body_font_size and body_font_size < 14:
+        feedback.append(f"The base body font size ({body_font_size}px) seems small. Consider increasing it to at least 14-16px for better readability.")
+    elif not body_font_size:
+        feedback.append("Consider explicitly setting a base font-size for the body (e.g., 16px) for consistent readability.")
+
+    # 3. Heading differentiation (very simplified)
+    h1_tags = soup.find_all('h1')
+    h2_tags = soup.find_all('h2')
+    p_tags = soup.find_all('p')
+
+    # This is a very rough check. Real check needs computed styles.
+    if h1_tags and p_tags:
+        feedback.append("Ensure <h1> headings are significantly larger than paragraph text for clear visual hierarchy.")
+    if h2_tags and p_tags:
+        feedback.append("Ensure <h2> headings are noticeably larger than paragraph text and distinct from <h1>.")
+
+    # 4. Basic spacing/padding check for common elements
+    #    Checks if any style attribute or rule *mentions* padding or margin for these.
+    common_sections = soup.find_all(['header', 'footer', 'main', 'section', 'article', 'aside'])
+    cards = soup.find_all(lambda tag: 'card' in tag.get('class', [])) # Example: finds class="card"
+    
+    elements_to_check_spacing = common_sections + cards
+    if elements_to_check_spacing:
+        missing_spacing_count = 0
+        for elem in elements_to_check_spacing[:3]: # Check a few samples
+            has_spacing_style = False
+            if elem.get('style') and ('padding:' in elem.get('style') or 'margin:' in elem.get('style')):
+                has_spacing_style = True
+            
+            if not has_spacing_style:
+                # Check <style> tags for rules targeting this element's tag name or class
+                for s_tag in style_tags:
+                    if s_tag.string:
+                        # Simplified check for tag name
+                        if f"{elem.name} {{" in s_tag.string and ('padding:' in s_tag.string or 'margin:' in s_tag.string):
+                            has_spacing_style = True
+                            break
+                        # Simplified check for class (if any)
+                        for cls in elem.get('class', []):
+                            if f".{cls} {{" in s_tag.string and ('padding:' in s_tag.string or 'margin:' in s_tag.string):
+                                has_spacing_style = True
+                                break
+                        if has_spacing_style:
+                            break
+            if not has_spacing_style:
+                missing_spacing_count +=1
+        
+        if missing_spacing_count > 1 : # If multiple checked elements lack explicit spacing
+             feedback.append("Some key sections or content blocks might lack sufficient padding or margins. Review spacing to improve layout and readability.")
+
+    # 5. Image presence
+    if not soup.find_all('img'):
+        feedback.append("The website currently contains no images (<img> tags). Consider adding relevant images, a logo, or icons to enhance visual engagement.")
+
+    # 6. Simplified Contrast Check (very basic: identical fg/bg)
+    # This is extremely basic and only checks for identical colors if explicitly set.
+    elements_for_contrast = soup.find_all(['p', 'span', 'li', 'a'] + h1_tags + h2_tags)
+    contrast_issues_found = 0
+    for elem in elements_for_contrast[:10]: # Check a sample
+        style_str = elem.get('style', '')
+        fg_color_match = re.search(r'color:\\s*([^;]+)', style_str)
+        bg_color_match = re.search(r'(?:background-color|background):\\s*([^;]+)', style_str)
+        if fg_color_match and bg_color_match:
+            fg_color = fg_color_match.group(1).strip()
+            bg_color = bg_color_match.group(1).strip()
+            if fg_color == bg_color and fg_color != 'transparent' and fg_color != 'inherit':
+                contrast_issues_found +=1
+                break 
+    if contrast_issues_found > 0:
+        feedback.append("Potential low contrast: Found elements where foreground and background color might be too similar or explicitly set to the same value. Please review text readability.")
+    
+    return feedback
+
+
 def _generate_website_plan(raw_text: str, status_callback: Callable[[str], None] | None = None) -> tuple[str | None, bool, str | None]:
     """
     Analyzes resume text, determines if it's a valid resume, and generates a website plan.
@@ -281,8 +410,7 @@ def _generate_website_plan(raw_text: str, status_callback: Callable[[str], None]
 def generate_html_llm(raw_text: str, status_callback: Callable[[str], None] | None = None) -> str:
     """
     Generates a full HTML website directly from raw resume text using an LLM,
-    with validation and a retry mechanism for fixing issues.
-    Includes a plan generation step.
+    with validation, a retry mechanism for fixing issues, and visual tweaking.
 
     Args:
         raw_text: The raw text from the resume.
@@ -323,6 +451,7 @@ def generate_html_llm(raw_text: str, status_callback: Callable[[str], None] | No
     current_html = ""
     last_errors: list[str] = []
 
+    # --- Stage 1: HTML Generation and Validation ---
     for attempt in range(_MAX_FIX_ATTEMPTS + 1):
         if attempt == 0:
             # Initial generation attempt
@@ -363,8 +492,8 @@ def generate_html_llm(raw_text: str, status_callback: Callable[[str], None] | No
             if status_callback:
                 status_callback("✅ Website (HTML/CSS) validation passed!")
             print("HTML/CSS validation passed.")
-            cache_path.write_text(current_html, encoding='utf-8')
-            return current_html
+            # HTML is valid, break this loop and proceed to visual analysis or caching
+            break 
         
         last_errors = validation_errors
         print(f"Validation errors found (attempt {attempt + 1}/{_MAX_FIX_ATTEMPTS + 1}):")
@@ -372,10 +501,74 @@ def generate_html_llm(raw_text: str, status_callback: Callable[[str], None] | No
             print(f"- {err_item}")
         if status_callback:
             status_callback(f"⚠️ Validation failed (Attempt {attempt + 1}/{_MAX_FIX_ATTEMPTS + 1}). Errors: {len(last_errors)}")
+        
+        if attempt == _MAX_FIX_ATTEMPTS: # If it's the last attempt and still has errors
+            final_failure_message = f"Failed to generate valid Website after {attempt + 1} attempts due to HTML/CSS errors. Returning last generated version."
+            if status_callback:
+                status_callback(f"❌ {final_failure_message}")
+            print(final_failure_message)
+            cache_path.write_text(current_html, encoding='utf-8') # Cache the last attempt anyway
+            return current_html
 
-    final_failure_message = f"Failed to generate valid Website after {_MAX_FIX_ATTEMPTS + 1} attempts. Returning last generated version."
+    # --- Stage 2: Visual Clarity Analysis and Tweaking ---
+    if not validation_errors: # Proceed only if HTML/CSS is valid
+        for visual_attempt in range(_MAX_VISUAL_TWEAK_ATTEMPTS + 1):
+            if status_callback:
+                status_callback(f"🎨 Analyzing visual clarity (Attempt {visual_attempt + 1}/{_MAX_VISUAL_TWEAK_ATTEMPTS + 1})...")
+            
+            visual_feedback = _analyze_visual_clarity(current_html)
+
+            if not visual_feedback:
+                if status_callback:
+                    status_callback("✨ Visual clarity analysis passed, no immediate suggestions.")
+                break # No feedback, so no tweaks needed.
+            
+            if visual_attempt == _MAX_VISUAL_TWEAK_ATTEMPTS: # Maxed out visual tweak attempts
+                if status_callback:
+                    status_callback(f"⚠️ Reached max visual tweak attempts. Using current version. Feedback: {visual_feedback}")
+                break
+
+            if status_callback:
+                status_callback(f"🖌️ Attempting visual tweaks based on {len(visual_feedback)} suggestions...")
+                status_callback(f"Suggestions:\\n" + "\\n".join([f"- {f}" for f in visual_feedback]))
+
+            prompt_visual_tweaks = _SYSTEM_PROMPT_VISUAL_TWEAKS.replace("{{resume_text}}", raw_text)
+            prompt_visual_tweaks = prompt_visual_tweaks.replace("{{website_plan}}", website_plan)
+            prompt_visual_tweaks = prompt_visual_tweaks.replace("{{current_html}}", current_html)
+            prompt_visual_tweaks = prompt_visual_tweaks.replace("{{visual_feedback}}", "\\n".join(visual_feedback))
+
+            messages_visual = [
+                {"role": "system", "content": prompt_visual_tweaks},
+                {"role": "user", "content": "Refine the HTML based on the visual improvement suggestions provided."}
+            ]
+            
+            rsp_visual = chat(model=_MODEL, messages=messages_visual)
+            raw_output_visual = rsp_visual.message.content
+            tweaked_html = _extract_html(raw_output_visual)
+
+            # Validate the tweaked HTML again (important!)
+            if status_callback:
+                status_callback("🔍 Validating tweaked Website (HTML/CSS)...")
+            validation_errors_after_tweak = _validate_html_css(tweaked_html)
+
+            if not validation_errors_after_tweak:
+                if status_callback:
+                    status_callback("✅ Tweaked Website passed HTML/CSS validation!")
+                current_html = tweaked_html # Update current_html with the successfully tweaked version
+                # Optionally, re-run visual analysis on tweaked_html or just accept it.
+                # For simplicity, we'll break the visual tweak loop if it validates.
+                # If we want to ensure the feedback was addressed, we'd re-run _analyze_visual_clarity.
+                # For now, one successful tweak attempt is enough.
+                break 
+            else:
+                if status_callback:
+                    status_callback(f"⚠️ Tweaked Website failed HTML/CSS validation. Errors: {validation_errors_after_tweak}. Reverting to pre-tweak version for this attempt.")
+                # Stick with the `current_html` that was valid before this failed tweak.
+                # The loop will continue if `visual_attempt < _MAX_VISUAL_TWEAK_ATTEMPTS`.
+                # If it's the last visual attempt and it fails validation, we'll fall through and use the last valid HTML.
+
+    # --- Final Stage: Caching and Returning ---
     if status_callback:
-        status_callback(f"❌ {final_failure_message}")
-    print(final_failure_message)
-    cache_path.write_text(current_html, encoding='utf-8') # Cache the last attempt anyway
+        status_callback("💾 Caching final website version.")
+    cache_path.write_text(current_html, encoding='utf-8')
     return current_html
