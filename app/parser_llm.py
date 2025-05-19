@@ -6,12 +6,13 @@ LLM-based résumé parser (DeepSeek-Coder-v2 via Ollama).
 • Runs clean_resume() to de-camel titles, format phone, etc.
 """
 from __future__ import annotations
-import hashlib, json, os, re, textwrap
+import json, os, re, textwrap
 from pathlib import Path
 from ollama import chat
 
 from schema_resume import RESUME_SCHEMA
 from cleaner import clean_resume
+from utils import _sha
 
 _MODEL = "deepseek-coder-v2"
 _CACHE_DIR = Path(".cache")
@@ -25,9 +26,6 @@ Output ONLY valid JSON conforming to this schema (no markdown fences):
 """)
 
 _JSON_FINDER = re.compile(r"\{.*\}", re.S)
-
-def _sha(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()
 
 def _extract_json(raw: str) -> dict:
     try:
