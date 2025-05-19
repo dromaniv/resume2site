@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 import html5lib # For HTML5 parsing
 import cssutils
 import logging
+import json # Add json import
 from typing import Callable # Add Callable
 
 from utils import _sha
@@ -28,17 +29,54 @@ _MODEL = "deepseek-coder-v2"
 # app/generator_llm.py -> app.parent is app/ -> app.parent.parent is project root
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _HTML_CACHE_DIR = _PROJECT_ROOT / ".cache" / "html"  # Use absolute path
+_PLAN_CACHE_DIR = _PROJECT_ROOT / ".cache" / "plans" # Cache for plans
 
 _HTML_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+_PLAN_CACHE_DIR.mkdir(parents=True, exist_ok=True) # Create plan cache directory
 _MAX_FIX_ATTEMPTS = 2 # Maximum attempts to fix HTML/CSS issues
 
-_SYSTEM_PROMPT_HTML = textwrap.dedent(f"""
+_SYSTEM_PROMPT_PLAN = textwrap.dedent(f"""\
+You are an expert resume analyst and web strategist.
+Your task is to analyze the provided text. 
+First, determine if the text likely contains information typically found in a resume (e.g., skills, experience, education, projects).
+If it DOES, generate a concise plan for a personal portfolio website based on its content. The plan should outline the main sections and key information to include.
+If it does NOT seem to contain resume-like information, state that briefly.
+
+Output Format:
+- Start with "IS_RESUME: TRUE" or "IS_RESUME: FALSE".
+- If "IS_RESUME: TRUE", follow with "PLAN:" on a new line, then the plan details (e.g., Header, Contact, Summary, Experience, Education, Skills, Projects).
+- If "IS_RESUME: FALSE", follow with "REASON:" on a new line, then a very brief, neutral explanation (e.g., "The text does not appear to contain typical resume sections.").
+
+Example for a resume-like text:
+IS_RESUME: TRUE
+PLAN:
+- Header: [Candidate's Name], [Candidate's Tagline/Current Role]
+- Contact Information: Email, Phone, LinkedIn, GitHub
+- Summary/About Me: Brief overview.
+- Work Experience: Roles, companies, dates, responsibilities.
+- Education: Degrees, institutions, dates.
+- Skills: List of skills.
+- Projects: Project descriptions.
+
+Example for non-resume text:
+IS_RESUME: FALSE
+REASON: The text does not appear to contain typical resume sections.
+""")
+
+_SYSTEM_PROMPT_HTML = textwrap.dedent(f"""\
 You are an expert web designer and developer with a keen eye for modern aesthetics and user interaction.
-Based on the provided résumé text, generate a COMPLETE, MODERN, BEAUTIFUL, and INTERACTIVE single HTML file for a personal portfolio website.
+You will be given a plan for a personal portfolio website, derived from a resume.
+Based on the provided résumé text AND the website plan, generate a COMPLETE, MODERN, BEAUTIFUL, and INTERACTIVE single HTML file.
+
+Website Plan:
+{{{{website_plan}}}}
+
+Résumé Text:
+{{{{resume_text}}}}
 
 Key requirements for the generated HTML:
-1.  **Structure**: Well-structured and semantically correct HTML5.
-2.  **Content**: Accurately represent all relevant information from the résumé text, including:
+1.  **Structure**: Well-structured and semantically correct HTML5, following the provided website plan.
+2.  **Content**: Accurately represent all relevant information from the résumé text, organized according to the plan.
     *   Name and Headline
     *   Contact Information (email, phone, GitHub, LinkedIn)
     *   Summary/About Me
@@ -56,28 +94,38 @@ Key requirements for the generated HTML:
     *   The interactivity should enhance the user experience, not detract from it.
 5.  **Output Format**:
     *   Ensure the output is ONLY the HTML code, starting with `<!DOCTYPE html>` and ending with `</html>`.
-    *   Do NOT include any markdown fences (like \`\`\`html) or any other text, comments, or explanations outside the HTML itself.
+    *   Do NOT include any markdown fences (like \\`\\`\\`html) or any other text, comments, or explanations outside the HTML itself.
 
 Strive for a polished, portfolio-quality website that the user would be proud to share.
 Consider using modern design trends and interactive patterns.
 """)
 
-_SYSTEM_PROMPT_FIX_HTML = textwrap.dedent(f"""
-You are an expert web developer. You previously generated HTML code that has some validation errors.
-Your task is to fix the provided HTML code based on the error messages.
-Output ONLY the corrected, complete HTML code, starting with <!DOCTYPE html> and ending with </html>.
-Do NOT include any markdown fences or explanations, just the raw HTML.
+_SYSTEM_PROMPT_FIX_HTML = textwrap.dedent(f"""\
+You are an expert web developer. You previously generated HTML code that had some issues.
+Your task is to fix the provided HTML code based on the validation errors.
 
-Original Resume Text (for context):
+Original Résumé Text (for context, do not regenerate from this, only fix the HTML):
 {{{{resume_text}}}}
 
-Previous HTML with errors:
+Website Plan (for context):
+{{{{website_plan}}}}
+
+Previously Generated HTML (with issues):
+```html
 {{{{previous_html}}}}
+```
 
 Validation Errors:
+```
 {{{{errors}}}}
+```
 
-Correct the HTML code to resolve these errors.
+Instructions:
+1.  Carefully analyze the validation errors.
+2.  Modify ONLY the problematic parts of the `previous_html` to fix these errors.
+3.  Ensure all CSS is in `<style>` tags or inline, and all JS is in `<script>` tags.
+4.  The output should be the complete, corrected HTML code, starting with `<!DOCTYPE html>` and ending with `</html>`.
+5.  Do NOT include any markdown fences (like \\`\\`\\`html) or any other text, comments, or explanations outside the HTML itself.
 """)
 
 def _extract_html(raw_html_output: str) -> str:
@@ -159,47 +207,148 @@ def _validate_html_css(html_content: str) -> list[str]:
             
     return errors
 
+def _generate_website_plan(raw_text: str, status_callback: Callable[[str], None] | None = None) -> tuple[str | None, bool, str | None]:
+    """
+    Analyzes resume text, determines if it's a valid resume, and generates a website plan.
+    Caches the plan and validity.
+
+    Returns:
+        A tuple: (plan_text_or_none, is_resume_bool, reason_if_not_resume_or_none)
+    """
+    cache_key = _sha(raw_text)
+    plan_cache_path = _PLAN_CACHE_DIR / f"{cache_key}.txt" # Store as text file
+
+    if plan_cache_path.exists():
+        if status_callback:
+            status_callback("📄 Found cached website plan.")
+        cached_content = plan_cache_path.read_text(encoding='utf-8')
+        
+        is_resume_line = cached_content.split('\\n', 1)[0]
+        is_resume = "IS_RESUME: TRUE" in is_resume_line
+
+        if is_resume:
+            # Ensure "PLAN:" exists before splitting
+            if "PLAN:" in cached_content:
+                plan_content = cached_content.split("PLAN:", 1)[1].strip()
+            else: # Fallback if format is slightly off but IS_RESUME is TRUE
+                plan_content = "Plan details not found in expected format in cache."
+            return plan_content, True, None
+        else:
+            # Ensure "REASON:" exists before splitting
+            if "REASON:" in cached_content:
+                reason_content = cached_content.split("REASON:", 1)[1].strip()
+            else: # Fallback if format is slightly off
+                reason_content = "Reason not found in expected format in cache."
+            return None, False, reason_content
+
+    if status_callback:
+        status_callback("🧠 Analyzing resume and generating website plan...")
+
+    messages = [
+        {"role": "system", "content": _SYSTEM_PROMPT_PLAN},
+        {"role": "user", "content": raw_text},
+    ]
+    rsp = chat(model=_MODEL, messages=messages)
+    plan_output = rsp.message.content.strip()
+
+    # Save the raw output to cache
+    plan_cache_path.write_text(plan_output, encoding='utf-8')
+
+    is_resume_line = plan_output.split('\\n', 1)[0]
+    is_resume = "IS_RESUME: TRUE" in is_resume_line
+
+    if is_resume:
+        # Ensure "PLAN:" exists before splitting
+        if "PLAN:" in plan_output:
+            plan_content = plan_output.split("PLAN:", 1)[1].strip()
+            if status_callback:
+                status_callback(f"📝 Plan generated successfully.") # Simplified message for brevity in status
+        else:
+            plan_content = "Plan generation succeeded, but plan details are not in the expected format."
+            if status_callback:
+                status_callback(f"⚠️ Plan generated, but details might be missing from output.")
+        return plan_content, True, None
+    else:
+        # Ensure "REASON:" exists before splitting
+        if "REASON:" in plan_output:
+            reason_content = plan_output.split("REASON:", 1)[1].strip()
+        else:
+            reason_content = "Could not determine reason for invalid resume (output format unexpected)."
+        if status_callback:
+            status_callback(f"⚠️ Not a valid resume. Reason: {reason_content}")
+        return None, False, reason_content
+
 def generate_html_llm(raw_text: str, status_callback: Callable[[str], None] | None = None) -> str:
     """
     Generates a full HTML website directly from raw resume text using an LLM,
     with validation and a retry mechanism for fixing issues.
+    Includes a plan generation step.
 
     Args:
         raw_text: The raw text from the resume.
         status_callback: An optional function to call with status updates.
     """
-    cache_path = _HTML_CACHE_DIR / f"{_sha(raw_text)}.html"
+    # Step 1: Generate/retrieve website plan
+    website_plan, is_resume, reason = _generate_website_plan(raw_text, status_callback)
+
+    if not is_resume:
+        error_message = f"The provided text does not appear to be a valid resume. Reason: {reason}"
+        if status_callback:
+            status_callback(f"❌ {error_message}") # Error message starts with ❌
+        return f"<html><head><title>Error</title></head><body><h1>Input Error</h1><p>{error_message}</p></body></html>"
+
+    if not website_plan: # Should not happen if is_resume is True, but as a safeguard
+        error_message = "Failed to generate a website plan, even though input was considered a resume."
+        if status_callback:
+            status_callback(f"❌ {error_message}") # Error message starts with ❌
+        return f"<html><head><title>Error</title></head><body><h1>Processing Error</h1><p>{error_message}</p></body></html>"
+
+    if status_callback:
+        # Send plan separately
+        status_callback(f"📝 **Website Plan:**\n```\n{website_plan}\n```")
+        # Then send status about starting HTML generation
+        status_callback("⏳ Now generating HTML based on this plan...")
+
+
+    # Step 2: Generate HTML based on the plan and resume text
+    # HTML cache key is based on raw_text + plan_text to ensure plan changes trigger regeneration
+    html_cache_key_content = raw_text + "||PLAN||" + website_plan 
+    cache_path = _HTML_CACHE_DIR / f"{_sha(html_cache_key_content)}.html"
+    
     if cache_path.exists():
         if status_callback:
-            status_callback("📄 Found cached HTML.")
+            status_callback("📄 Found cached HTML (post-plan).")
         return cache_path.read_text(encoding='utf-8')
 
     current_html = ""
-    last_errors = []
+    last_errors: list[str] = []
 
     for attempt in range(_MAX_FIX_ATTEMPTS + 1):
         if attempt == 0:
             # Initial generation attempt
             if status_callback:
-                status_callback("🤖 Calling LLM for initial HTML generation...")
+                status_callback(f"🤖 Attempt {attempt + 1}/{_MAX_FIX_ATTEMPTS + 1}: Calling LLM for initial HTML generation (using plan)...")
+            
+            current_system_prompt_html = _SYSTEM_PROMPT_HTML.replace("{{website_plan}}", website_plan)
+            current_system_prompt_html = current_system_prompt_html.replace("{{resume_text}}", raw_text)
+
             messages = [
-                {"role": "system", "content": _SYSTEM_PROMPT_HTML},
-                {"role": "user", "content": raw_text},
+                {"role": "system", "content": current_system_prompt_html},
+                {"role": "user", "content": "Generate the HTML website based on the provided plan and resume text."},
             ]
         else:
             # Fixing attempt
             if status_callback:
-                status_callback(f"🛠️ Attempting to fix errors (Attempt {attempt}/{_MAX_FIX_ATTEMPTS})...")
+                status_callback(f"🛠️ Attempt {attempt + 1}/{_MAX_FIX_ATTEMPTS + 1}: Trying to fix HTML. Errors: {len(last_errors)}")
             
-            prompt_fix = _SYSTEM_PROMPT_FIX_HTML.replace("{{resume_text}}", raw_text) \
-                                                .replace("{{previous_html}}", current_html) \
-                                                .replace("{{errors}}", "\\n".join(last_errors))
-            if status_callback:
-                status_callback("🤖 Asking LLM to correct the HTML...")
+            prompt_fix = _SYSTEM_PROMPT_FIX_HTML.replace("{{resume_text}}", raw_text)
+            prompt_fix = prompt_fix.replace("{{website_plan}}", website_plan) # Add plan to fix prompt
+            prompt_fix = prompt_fix.replace("{{previous_html}}", current_html)
+            prompt_fix = prompt_fix.replace("{{errors}}", "\\n".join(last_errors))
+            
             messages = [
                 {"role": "system", "content": prompt_fix},
-                # The user role here is effectively the problematic HTML + errors
-                {"role": "user", "content": f"Fix the following HTML based on the errors provided in the system prompt."}
+                {"role": "user", "content": "Fix the provided HTML based on the errors."} # Simplified user message
             ]
 
         rsp = chat(model=_MODEL, messages=messages)
@@ -219,14 +368,14 @@ def generate_html_llm(raw_text: str, status_callback: Callable[[str], None] | No
         
         last_errors = validation_errors
         print(f"Validation errors found (attempt {attempt + 1}/{_MAX_FIX_ATTEMPTS + 1}):")
-        for err in last_errors:
-            print(f"- {err}")
+        for err_item in last_errors: # Renamed err to err_item to avoid conflict
+            print(f"- {err_item}")
         if status_callback:
             status_callback(f"⚠️ Validation failed (Attempt {attempt + 1}/{_MAX_FIX_ATTEMPTS + 1}). Errors: {len(last_errors)}")
 
-
+    final_failure_message = f"Failed to generate valid HTML after {_MAX_FIX_ATTEMPTS + 1} attempts. Returning last generated version."
     if status_callback:
-        status_callback(f"❌ Failed to generate valid HTML after {_MAX_FIX_ATTEMPTS + 1} attempts. Using last version.")
-    print(f"Failed to generate valid HTML after {_MAX_FIX_ATTEMPTS + 1} attempts. Returning last generated version.")
+        status_callback(f"❌ {final_failure_message}")
+    print(final_failure_message)
     cache_path.write_text(current_html, encoding='utf-8') # Cache the last attempt anyway
     return current_html
