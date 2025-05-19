@@ -307,7 +307,7 @@ def generate_html_llm(raw_text: str, status_callback: Callable[[str], None] | No
         # Send plan separately
         status_callback(f"📝 **Website Plan:**\n```\n{website_plan}\n```")
         # Then send status about starting HTML generation
-        status_callback("⏳ Now generating HTML based on this plan...")
+        status_callback("⏳ Now generating Website based on this plan...")
 
 
     # Step 2: Generate HTML based on the plan and resume text
@@ -317,7 +317,7 @@ def generate_html_llm(raw_text: str, status_callback: Callable[[str], None] | No
     
     if cache_path.exists():
         if status_callback:
-            status_callback("📄 Found cached HTML (post-plan).")
+            status_callback("📄 Found cached Website (post-plan).")
         return cache_path.read_text(encoding='utf-8')
 
     current_html = ""
@@ -327,7 +327,7 @@ def generate_html_llm(raw_text: str, status_callback: Callable[[str], None] | No
         if attempt == 0:
             # Initial generation attempt
             if status_callback:
-                status_callback(f"🤖 Attempt {attempt + 1}/{_MAX_FIX_ATTEMPTS + 1}: Calling LLM for initial HTML generation (using plan)...")
+                status_callback(f"🤖 Attempt {attempt + 1}/{_MAX_FIX_ATTEMPTS + 1}: Calling LLM for initial Website generation (using plan)...")
             
             current_system_prompt_html = _SYSTEM_PROMPT_HTML.replace("{{website_plan}}", website_plan)
             current_system_prompt_html = current_system_prompt_html.replace("{{resume_text}}", raw_text)
@@ -339,7 +339,7 @@ def generate_html_llm(raw_text: str, status_callback: Callable[[str], None] | No
         else:
             # Fixing attempt
             if status_callback:
-                status_callback(f"🛠️ Attempt {attempt + 1}/{_MAX_FIX_ATTEMPTS + 1}: Trying to fix HTML. Errors: {len(last_errors)}")
+                status_callback(f"🛠️ Attempt {attempt + 1}/{_MAX_FIX_ATTEMPTS + 1}: Trying to fix Website. Errors: {len(last_errors)}")
             
             prompt_fix = _SYSTEM_PROMPT_FIX_HTML.replace("{{resume_text}}", raw_text)
             prompt_fix = prompt_fix.replace("{{website_plan}}", website_plan) # Add plan to fix prompt
@@ -356,12 +356,12 @@ def generate_html_llm(raw_text: str, status_callback: Callable[[str], None] | No
         current_html = _extract_html(raw_output)
         
         if status_callback:
-            status_callback("🔍 Validating generated HTML/CSS...")
+            status_callback("🔍 Validating generated Website (HTML/CSS)...")
         validation_errors = _validate_html_css(current_html)
         
         if not validation_errors:
             if status_callback:
-                status_callback("✅ HTML/CSS validation passed!")
+                status_callback("✅ Website (HTML/CSS) validation passed!")
             print("HTML/CSS validation passed.")
             cache_path.write_text(current_html, encoding='utf-8')
             return current_html
@@ -373,7 +373,7 @@ def generate_html_llm(raw_text: str, status_callback: Callable[[str], None] | No
         if status_callback:
             status_callback(f"⚠️ Validation failed (Attempt {attempt + 1}/{_MAX_FIX_ATTEMPTS + 1}). Errors: {len(last_errors)}")
 
-    final_failure_message = f"Failed to generate valid HTML after {_MAX_FIX_ATTEMPTS + 1} attempts. Returning last generated version."
+    final_failure_message = f"Failed to generate valid Website after {_MAX_FIX_ATTEMPTS + 1} attempts. Returning last generated version."
     if status_callback:
         status_callback(f"❌ {final_failure_message}")
     print(final_failure_message)
