@@ -535,13 +535,13 @@ def generate_html_llm(
         )
         if status_callback:
             status_callback(f"❌ {error_message}")  # Error message starts with ❌
-        return f"<html><head><title>Error</title></head><body><h1>Input Error</h1><p>{error_message}</p></body></html>"
+        return ""
 
     if not website_plan:  # Should not happen if is_resume is True, but as a safeguard
         error_message = "Failed to generate a website plan, even though input was considered a resume."
         if status_callback:
             status_callback(f"❌ {error_message}")  # Error message starts with ❌
-        return f"<html><head><title>Error</title></head><body><h1>Processing Error</h1><p>{error_message}</p></body></html>"
+        return ""
 
     if status_callback:
         # Send plan separately
