@@ -5,6 +5,7 @@ LLM-based résumé parser (DeepSeek-Coder-v2 via Ollama).
   queried only once per unique resume text.
 • Runs clean_resume() to de-camel titles, format phone, etc.
 """
+
 from __future__ import annotations
 import json, os, re, textwrap
 from pathlib import Path
@@ -18,14 +19,17 @@ _MODEL = "deepseek-coder-v2"
 _CACHE_DIR = Path(".cache")
 _CACHE_DIR.mkdir(exist_ok=True)
 
-_SYSTEM_PROMPT = textwrap.dedent(f"""
+_SYSTEM_PROMPT = textwrap.dedent(
+    f"""
 You are an expert résumé parser.
 Output ONLY valid JSON conforming to this schema (no markdown fences):
 
 {json.dumps(RESUME_SCHEMA, indent=2)}
-""")
+"""
+)
 
 _JSON_FINDER = re.compile(r"\{.*\}", re.S)
+
 
 def _extract_json(raw: str) -> dict:
     try:
@@ -34,6 +38,7 @@ def _extract_json(raw: str) -> dict:
         if m := _JSON_FINDER.search(raw):
             return json.loads(m.group())
         raise
+
 
 def parse_resume_llm(raw_text: str) -> dict:
     cache_path = _CACHE_DIR / f"{_sha(raw_text)}.json"

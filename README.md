@@ -1,10 +1,18 @@
 # Résumé-to-Site
 
-Upload a PDF résumé → Get a static personal website!
+Upload a PDF résumé → Get a dynamic, LLM-generated personal website!
 
-✅ Supports both:
-- Rule-based extraction (fast, offline, classic)
-- LLM-based extraction (DeepSeek Coder V2 via Ollama)
+✨ **Key Features** ✨
+- **LLM-Powered Website Generation**: Directly creates modern, interactive websites from your résumé using an LLM (DeepSeek Coder V2 via Ollama).
+- **Website Plan**: The LLM first analyzes the résumé and proposes a "website plan," which is displayed in the UI.
+- **Automatic Generation**: Website generation starts automatically upon PDF upload or when changing generation modes.
+- **Quality Analysis & Tweaks**: Includes an automated step to analyze the generated website for visual clarity, link validity, and basic accessibility, then prompts the LLM to make improvements.
+- **Enhanced Preview**: View the generated website directly in the app with an enlarged preview pane.
+- **Multiple Generation Modes**:
+    - **LLM (Direct Website)**: The full LLM-powered generation with planning and quality tweaks.
+    - **LLM (JSON + Template)**: Parses the résumé to JSON using an LLM, then uses a Jinja2 template.
+    - **Rule-based (JSON + Template)**: Parses the résumé to JSON using traditional rules, then uses a Jinja2 template.
+- **Caching**: LLM responses for plans and generated websites are cached to speed up subsequent runs with the same input.
 
 ---
 
@@ -43,8 +51,9 @@ Upload a PDF résumé → Get a static personal website!
 6. **Open your browser**
    - Go to: http://localhost:8501
    - Upload a PDF resume
-   - Choose "LLM" or "Rule-based"
-   - Download your generated website!
+   - Choose your preferred generation mode.
+   - View the plan (for LLM Direct Website mode) and the generation process.
+   - Preview and download your generated website!
 
 ---
 
@@ -53,21 +62,26 @@ Upload a PDF résumé → Get a static personal website!
 ```
 app/
  ├── extractor.py     # Extracts text from PDF
- ├── parser_llm.py    # LLM parsing (DeepSeek)
- ├── parser_rule.py   # Rule-based parsing
- ├── generator.py     # Renders HTML from JSON
- ├── cleaner.py       # Schema normalizer
- ├── schema_resume.py # Base JSON schema
+ ├── parser_llm.py    # LLM-based résumé to JSON parser
+ ├── parser_rule.py   # Rule-based résumé to JSON parser
+ ├── generator_llm.py # LLM-based résumé to Website generator (direct HTML)
+ ├── generator_rule.py# Renders HTML from JSON using templates (formerly generator.py)
+ ├── cleaner.py       # Schema normalizer and data cleanup
+ ├── schema_resume.py # Base JSON schema for résumé data
+ ├── gui.py           # Main Streamlit application UI and logic
+ ├── utils.py         # Utility functions (e.g., hashing)
  ├── templates/
- │    └── base.html   # HTML template
+ │    └── base.html   # Jinja2 HTML template for JSON-based generation
  └── static/
-      └── style.css   # CSS styles
+      └── style.css   # CSS styles (primarily for template-based generation)
+.cache/               # Stores cached LLM responses (plans, HTML)
 ```
 
 ---
 
 ## ⚡ Quick Notes
 
-- The **LLM mode** caches results so it won't query Ollama every time.
-- Preview uses **inline CSS** inside Streamlit for correct styling.
-- Download button gives you a **clean `index.html`** + separate `static/style.css`.
+- The **LLM (Direct Website)** mode is the most advanced, offering features like website planning and quality-driven iterative improvements.
+- The LLM modes cache results (website plans and final HTML) in the `.cache/` directory to avoid redundant Ollama queries.
+- The in-app preview displays the website with all CSS and JS embedded.
+- The download button provides a single `website.html` file.

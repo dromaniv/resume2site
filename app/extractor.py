@@ -3,6 +3,7 @@ PDF ➜ raw text
 – strips `(cid:N)` glyph artifacts
 – suppresses verbose CropBox warnings from pdfplumber/pdfminer
 """
+
 from pathlib import Path
 import re, logging, warnings, pdfplumber
 
@@ -12,6 +13,7 @@ logging.getLogger("pdfminer").setLevel(logging.ERROR)
 warnings.filterwarnings("ignore", category=UserWarning, module="pdfminer")
 
 _CID_RE = re.compile(r"\(cid:\d+\)")
+
 
 def pdf_to_text(pdf_path: str | Path) -> str:
     with pdfplumber.open(pdf_path) as pdf:
