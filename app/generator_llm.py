@@ -1,5 +1,5 @@
 """
-LLM-based HTML website generator (DeepSeek-Coder-v2 via Ollama).
+LLM-based HTML website generator (Devstral from Mistral).
 
 • Caches responses in .cache/html/<sha256>.html so the model is
   queried only once per unique resume text.
@@ -24,7 +24,7 @@ from utils import _sha
 cssutils.log.setLevel(logging.CRITICAL)  # Only show critical errors from cssutils
 
 # Model and cache configuration
-_MODEL = "deepseek-coder-v2"
+_MODEL = "devstral"
 
 # Determine project root from this file's location
 # app/generator_llm.py -> app.parent is app/ -> app.parent.parent is project root

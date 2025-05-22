@@ -1,5 +1,5 @@
 """
-LLM-based résumé parser (DeepSeek-Coder-v2 via Ollama).
+LLM-based résumé parser (Devstral from Mistral).
 
 • Caches responses in .cache/<sha256>.json so the model is
   queried only once per unique resume text.
@@ -15,7 +15,7 @@ from schema_resume import RESUME_SCHEMA
 from cleaner import clean_resume
 from utils import _sha
 
-_MODEL = "deepseek-coder-v2"
+_MODEL = "devstral"
 _CACHE_DIR = Path(".cache")
 _CACHE_DIR.mkdir(exist_ok=True)
 

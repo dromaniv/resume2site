@@ -3,7 +3,7 @@
 Upload a PDF résumé → Get a dynamic, LLM-generated personal website!
 
 ✨ **Key Features** ✨
-- **LLM-Powered Website Generation**: Directly creates modern, interactive websites from your résumé using an LLM (DeepSeek Coder V2 via Ollama).
+- **LLM-Powered Website Generation**: Directly creates modern, interactive websites from your résumé using an LLM (Devstral via Ollama).
 - **Website Plan**: The LLM first analyzes the résumé and proposes a "website plan," which is displayed in the UI.
 - **Automatic Generation**: Website generation starts automatically upon PDF upload or when changing generation modes.
 - **Quality Analysis & Tweaks**: Includes an automated step to analyze the generated website for visual clarity, link validity, and basic accessibility, then prompts the LLM to make improvements.
@@ -40,7 +40,7 @@ Upload a PDF résumé → Get a dynamic, LLM-generated personal website!
    - Install Ollama if you don't have it: https://ollama.com
    - Run locally:
      ```bash
-     ollama run deepseek-coder:2
+     ollama run devstral
      ```
 
 5. **Run the app**
