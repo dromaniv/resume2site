@@ -585,9 +585,6 @@ if st.session_state.display_html and st.session_state.generated_html:
     
     # Create a clean chat interface
     with st.container():
-        # Simple visual separator for the chat area
-        st.markdown("---")
-        
         # Enhanced quick actions at the top of chat panel
         with st.expander("🚀 Quick Actions", expanded=False):
             col1, col2, col3, col4 = st.columns(4)
