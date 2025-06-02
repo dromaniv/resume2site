@@ -210,9 +210,7 @@ def _validate_html_css(html_content: str) -> list[str]:
         # For more detailed validation, a dedicated HTML validator tool/API would be needed.
 
     except html5lib.html5parser.ParseError as e:
-        errors.append(
-            f"HTML ParseError: {e.msg} (Code: {e.code}) at line {e.line}, col {e.col}"
-        )
+        errors.append(f"HTML ParseError: {str(e)}")
 
     # CSS validation (for <style> tags)
     soup = BeautifulSoup(html_content, "html.parser")
