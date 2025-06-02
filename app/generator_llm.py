@@ -40,83 +40,171 @@ _PLAN_CACHE_DIR = _PROJECT_ROOT / ".cache" / "plans"  # Cache for plans
 _HTML_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 _PLAN_CACHE_DIR.mkdir(parents=True, exist_ok=True)  # Create plan cache directory
 _MAX_FIX_ATTEMPTS = 2  # Maximum attempts to fix HTML/CSS issues
-
 _SYSTEM_PROMPT_PLAN = textwrap.dedent(
     f"""\
-You are an expert resume analyst and web strategist.
-Your task is to analyze the provided text. 
-First, determine if the text likely contains information typically found in a resume (e.g., skills, experience, education, projects).
-If it DOES, generate a concise plan for a personal portfolio website based on its content. The plan should outline the main sections and key information to include.
-If it does NOT seem to contain resume-like information, state that briefly.
+You are an expert resume analyzer and web planner. Your job is to parse a given text and produce a structured plan for a personal resume website with multiple pages.
 
-Output Format:
-- Start with "IS_RESUME: TRUE" or "IS_RESUME: FALSE".
-- If "IS_RESUME: TRUE", follow with "PLAN:" on a new line, then the plan details (e.g., Header, Contact, Summary, Experience, Education, Skills, Projects).
-- If "IS_RESUME: FALSE", follow with "REASON:" on a new line, then a very brief, neutral explanation (e.g., "The text does not appear to contain typical resume sections.").
+Instructions:
 
-Example for a resume-like text:
-IS_RESUME: TRUE
-PLAN:
-- Header: [Candidate's Name], [Candidate's Tagline/Current Role]
-- Contact Information: Email, Phone, LinkedIn, GitHub
-- Summary/About Me: Brief overview.
-- Work Experience: Roles, companies, dates, responsibilities.
-- Education: Degrees, institutions, dates.
-- Skills: List of skills.
-- Projects: Project descriptions.
+1. Resume Check: First, determine if the provided text ({{resume_text}}) is a resume. A resume typically contains structured information about a person’s career (e.g. work experience, education, skills, etc.). If the text lacks clear resume sections or reads like a narrative/cover letter, it may not be a resume.
 
-Example for non-resume text:
-IS_RESUME: FALSE
-REASON: The text does not appear to contain typical resume sections.
+2. Not a Resume: If the input is not clearly a resume, output exactly:
+   IS_RESUME: FALSE
+   Explanation: <brief reason the text is not a resume>
+   Do not include any additional content. For example, if the text has no employment or education details, you might say it appears to be a cover letter or unrelated text.
+
+3. Resume Plan: If the input is a resume, output a detailed website content plan in YAML format (no Markdown or code fences). Follow these guidelines for the YAML structure:
+   - Begin with IS_RESUME: TRUE.
+   - Next, have a top-level key sections: that contains a list of sections/pages for the personal website. Each section will correspond to a separate HTML file.
+   - Include appropriate sections based on the resume content. Common section names (as separate pages) include Home, About, Experience, Education, Skills, Projects, Contact. Use these exact names for consistency. Only include sections that have relevant information in the resume. For example, include a "Projects" section only if projects are mentioned in the resume.
+   - Each section in the list should be an item with a name field and the content extracted from the resume:
+     - Home: Provide the person’s name and a brief tagline or headline (e.g. current job title or personal slogan). Example: name: John Doe, tagline: Full-Stack Developer with 5 years of experience.
+     - About: A short bio or professional summary. Use the resume’s summary/objective statement if available, or create a brief overview of the candidate’s profile using details from the resume. This should be a few sentences highlighting key themes (e.g. "Software engineer with expertise in front-end development...").
+     - Experience: List each work experience as an item. For each job, include sub-fields: job title/role, company (and location if given), dates (start to end, or start to present), and a description of responsibilities or achievements. The description can be a brief paragraph or bullet points summarizing key accomplishments. Ensure this section is granular – include multiple jobs if present, in reverse chronological order.
+     - Education: List educational background. For each degree or qualification, include: degree title (e.g. B.Sc. in Computer Science), institution, graduation year (or years attended), and any notable honors or GPA if mentioned.
+     - Skills: Provide a list of skills. If the resume groups skills by category (e.g. Programming Languages, Tools, Languages), preserve those groupings with sub-lists or headings. Otherwise, list all key skills as a YAML list.
+     - Projects: If the resume mentions personal or professional projects, list each project with a name/title, a short description, and optionally technologies used or a link if provided.
+     - Contact: Extract contact information. Include fields like email, phone, address/location, and any web links (LinkedIn, GitHub, personal website). Use labels as keys (e.g. email: jane.doe@example.com, linkedin: linkedin.com/in/janedoe). If the resume has a dedicated contact section, use that. If not, use details from the header of the resume.
+   - Maintain clear indentation in the YAML. Each section (page) should be listed under the sections: list with its respective content nested properly. For example:
+       IS_RESUME: TRUE
+       sections:
+         - name: Home
+           name_on_page: Jane Doe
+           tagline: Full-Stack Developer with 5+ years of experience
+         - name: About
+           summary: "Passionate software engineer with experience in developing scalable web applications and a background in computer science..."
+         - name: Experience
+           jobs:
+             - title: Senior Developer
+               company: TechCorp Inc, New York, NY
+               dates: 2019 - Present
+               details:
+                 - Led a team of 5 engineers to develop...
+                 - Implemented a CI/CD pipeline that reduced deployment time by 30%...
+             - title: Junior Developer
+               company: Web Solutions, San Francisco, CA
+               dates: 2016 - 2019
+               details:
+                 - Collaborated on front-end development for client projects...
+                 - Maintained documentation and assisted in...
+         - name: Education
+           degrees:
+             - degree: B.Sc. in Computer Science
+               institution: University of XYZ
+               year: 2016
+               honors: "Magna Cum Laude"
+         - name: Skills
+           skills:
+             - JavaScript
+             - Python
+             - React
+             - Node.js
+             - HTML
+             - CSS
+             - Git
+             - Agile methodologies
+         - name: Projects
+           projects:
+             - title: "Personal Portfolio Website"
+               description: "Designed and developed a responsive portfolio site to showcase projects, using HTML, CSS, and JavaScript."
+             - title: "Machine Learning Blog"
+               description: "Created a technical blog platform with a recommendation system, using Python (Flask) and deployed on Heroku."
+         - name: Contact
+           contact_info:
+             email: jane.doe@example.com
+             phone: 123-456-7890
+             linkedin: linkedin.com/in/janedoe
+             location: "San Francisco, CA"
+       *The above is an example structure. The actual content and sections should be derived from the provided resume.*
+   - Do not fabricate information. Use only details present in the resume_text. If certain typical sections (like Projects or Summary) are missing from the resume, simply omit them from the plan rather than adding new content.
+   - Keep the plan concise but comprehensive. It should capture all important resume details in an organized way.
+
+4. Output Only the Plan: The assistant’s answer should only contain the YAML plan (or the IS_RESUME false notice). Do not include explanations, commentary, or any formatting outside the YAML structure. The YAML should be valid and properly indented for easy reading.
+
+Ensure the output strictly follows the above guidelines.
+
 """
 )
 
 _SYSTEM_PROMPT_HTML = textwrap.dedent(
     f"""\
-You are an expert web designer and developer with a keen eye for modern aesthetics and user interaction.
-Your goal is to transform this resume into a compelling *personal online presence* that showcases the individual's skills, experience, and personality.
-Think beyond a simple document conversion; aim to build a mini-website that tells a story and encourages engagement.
+You are a seasoned front-end web developer. Using the website_plan and the original resume_text, your task is to generate one complete, single-file HTML website containing all sections of a personal resume. The overall site structure and content details are provided in {{website_plan}}. Produce a polished, standalone HTML page that includes every section (Home, About, Experience, Education, Skills, Projects, Contact) in a single document, adhering to the following requirements:
 
-You will be given a plan for a personal portfolio website, derived from a resume.
-Based on the provided résumé text AND the website plan, generate a COMPLETE, MODERN, BEAUTIFUL, and INTERACTIVE single HTML file.
+- Page Content & Structure:
+  - All Sections in One File: Include every section listed in {{website_plan}} (e.g., Home, About, Experience, Education, Skills, Projects, Contact) within one HTML file. Use distinct <section> elements (with id attributes matching their section names, e.g., <section id="skills">) so navigation links can scroll to each part.
+  - Header & Navigation: At the top of the page, include a consistent site header with a navigation bar that appears on all viewports. The nav bar should have links to all sections listed in {{website_plan}} (use exact names and order). Each link should use an anchor href to scroll to the corresponding section (e.g., href="#experience"). The currently viewed section link should be highlighted as the user scrolls (you can add an "active" class via JavaScript).
+  - Footer: At the bottom of the file, include a footer that appears on all pages within this single document. It can contain the person’s name, a copyright notice, and contact info or social links.
+  - Section Content: For each section, present its details clearly:
+    - Home: Create an attractive landing “hero” at the top of the page featuring the person’s name and tagline (from {{website_plan}}). Include a brief welcome message or overview paragraph pulled from the plan’s Home content.
+    - About: Present the bio or professional summary from the plan in a well-formatted paragraph or two. Use headings (<h2>) for the section title.
+    - Experience: List each work experience from the plan in reverse chronological order. For each job, create a “card” or <article> containing:
+      • Job title (<h3>), company and location (<p>), and dates (<p>).
+      • A list (<ul>) or paragraph summarizing responsibilities/achievements.
+      Separate each job with spacing or a horizontal rule (<hr>) to maintain clarity.
+    - Education: For each degree from the plan, create a sub-section with:
+      • Degree and institution (<h3>), date/year (<p>), and any honors or details.
+      List degrees in reverse chronological order.
+    - Skills: If the plan groups skills by category, create sub-headings for each category (e.g., <h3>Programming Languages</h3>) and display each skill as a “badge” (e.g., <span class="badge">JavaScript</span>). Use a flex or grid layout so badges wrap flexibly across multiple columns.
+    - Projects: For each project from the plan, create a card (<div class="project-card">) containing:
+      • Project title (<h3>), a short description (<p>), and if available, links (GitHub or live demo) as <a> elements styled as buttons.  
+      Use consistent card styles (background, padding, border-radius).
+    - Contact: Present contact details clearly: email, phone, LinkedIn, GitHub, location. Use appropriate icons (e.g., ✉️, 📞, 📍) next to each item. Also include a simple contact form (<form>) with Name, Email, Message fields and a submit button that uses a mailto: action to open the user’s email client.
+  - Active Section Indication: As the user scrolls, the navigation link for the section currently in view should be visually highlighted. Implement this using JavaScript that adds/removes an .active class on nav <a> elements based on scroll position.
+
+- Design & Styling:
+  - Inline CSS: Embed all CSS within a single <style> block in the <head>. Define a consistent theme:
+    • Choose a primary color for header background and link highlights, and an accent color for buttons and badges.
+    • Select a font-family for headings and body (use web-safe fonts, e.g., "Helvetica Neue", Arial, sans-serif).
+    • Define global styles for body (margin, padding, line-height, background-color), headings, paragraphs, links, lists, and badges.
+    • Style the navigation bar: fixed or sticky at top, with a background color, horizontal list of links, and hover/focus effects.
+    • Style each section (<section>) with padding (e.g., padding: 60px 0) and alternate background colors or subtle separators to distinguish between sections.
+    • Card Styles: For Experience and Projects, cards should have a white background, subtle box-shadow, border-radius, and padding.
+    • Badge Styles: Display each <span class="badge"> with inline-block, background-color (light accent), padding (4px 8px), border-radius: 12px, and margin: 4px.
+    • Contact Form: Style inputs and textarea with full width, padding, border, border-radius. Style the submit button with the primary color and hover effect.
+    • Footer: Style the footer with smaller text, background matching header or a dark shade, and centered content.
+  - Consistent Aesthetics: Use the same color palette and typography across all sections. If using section background variations (e.g., alternating white and light gray), keep them subtle to maintain a cohesive look.
+  - Hero/Banner: For Home, implement a full-width banner with a background color or gradient. Display the person’s name in a large, bold font (<h1>) and the tagline in a slightly smaller font (<h2>). Center the text vertically and horizontally.
+  - Visual Elements: Incorporate cards, badges, and icons:
+    • Cards: Use for Experience and Projects. Cards should use consistent padding, margin, and box-shadow. On hover, slightly increase the shadow or scale (use transition).
+    • Badges: Use for skills. Arrange badges in a wrapping flex container.
+    • Icons: Use Unicode emoji (✉️, 📞, 🎓, 💼, 📍) or embed simple SVG icons inline. If decorative, use aria-hidden="true"; if informative, add aria-label.
+  - Animations: Add subtle CSS transitions/animations:
+    • For nav links: on hover, change color or add underline with transition: 0.2s.
+    • For cards: on hover, increase box-shadow or slightly scale (transition: transform 0.2s, box-shadow 0.2s).
+    • Section Fade-In: Add a fade-in effect for each section when it scrolls into view (use CSS classes and JavaScript to add .visible).
+  - Semantic HTML5: Use <header> for the navigation, <nav> for the nav menu, <main> wrapping all <section> elements, and <footer> for the footer. Each Experience card and Project card can be wrapped in <article>.
+
+- Responsive Design:
+  - Mobile-First: Define styles for small screens first, then use @media queries for larger viewports:
+    • Mobile: Nav links collapse into a hamburger menu. Include a <button id="menu-toggle">☰</button> that toggles the nav menu’s visibility using JavaScript. Sections stack vertically, and cards use full width.
+    • Tablets & Desktops (min-width: 768px): Nav links display horizontally. Experience and Project cards arrange in a multi-column grid. Skills badges display in multiple columns. Sections have increased padding.
+  - Use flexible units (%) or rem for spacing and typography. Ensure images (if any) use max-width: 100% so they scale down.
+
+- Accessibility:
+  - Provide alt text for any images (if you include a profile photo in Home, use <img alt="Photo of [Name]">). For inline SVG or emoji icons, if not purely decorative add aria-label or aria-hidden="true" if decorative.
+  - Use a <button> element for the hamburger menu with aria-label="Toggle navigation" and aria-expanded attributes. When the menu is opened, set aria-expanded="true".
+  - Ensure proper heading hierarchy: Home’s <h1> is followed by <h2> for subheadings; each section title uses <h2>; Experience job titles use <h3>, etc.
+  - Maintain sufficient color contrast: text on background should meet WCAG AA.
+  - Add :focus styles for links and buttons (e.g., outline or box-shadow) so keyboard users can navigate.
+
+- Inline Script:
+  - At the end of the <body>, include a <script> block with JavaScript to:
+    • Toggle the mobile menu by adding/removing an .open class on the nav when the hamburger <button> is clicked.
+    • Highlight the active section link as the user scrolls by adding/removing an .active class on nav <a> elements based on scroll position.
+    • Add a fade-in effect: on scroll, detect when each <section> enters the viewport and add a .visible class to trigger CSS transitions.
+
+- Output Format:
+  - The result must be a fully valid HTML5 document, starting with <!DOCTYPE html> and ending with </html>. Include <html lang="en">, <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head> and a <title> (e.g., "John Doe – Resume").
+  - Self-Contained: All CSS and JavaScript must be embedded in <style> and <script> tags within the same file. Do not link to external resources (stylesheets, scripts, or images). If you need icons, use inline SVG or Unicode.
+  - No Extra Text: Output only the raw HTML code. Do not include any explanation, comments (unless necessary HTML comments), or Markdown. Do not wrap the HTML in code fences.
+
+Generate the complete single-file HTML website containing all sections from {{website_plan}}, following these guidelines.
 
 Website Plan:
 {{{{website_plan}}}}
 
 Résumé Text:
 {{{{resume_text}}}}
-
-Key requirements for the generated HTML:
-1.  **Structure**: Well-structured and semantically correct HTML5, following the provided website plan.
-    *   Consider creative layouts (e.g., a prominent hero section, two-column sections where appropriate, card-based designs for projects/experience) to make the page visually interesting and not just a linear list.
-2.  **Content**: Accurately represent all relevant information from the résumé text, organized according to the plan.
-    *   **Hero Section**: Create an impactful header or hero section with the candidate's name and headline/tagline.
-    *   **Contact Information**: Clearly present email, phone, GitHub, LinkedIn. Consider using icons for these.
-    *   **Summary/About Me**: Craft an engaging Summary/About Me section. If the resume is formal, try to inject a bit of personality while remaining professional. This is a key area to make it feel like a personal site.
-    *   **Work Experience**: Detail job titles, companies, dates, and responsibilities/achievements (ideally as bullet points).
-    *   **Education**: List degrees, institutions, and dates.
-    *   **Skills**: Categorize skills if possible (e.g., languages, tools, frameworks). Consider a visually appealing way to present these (e.g., badges, grouped lists).
-    *   **Projects**: If present, make this a highlight. For each project, include descriptions and links if available. Consider a card-based or gallery-like layout if there are multiple projects.
-    *   **Call to Action**: Include a subtle but clear call to action, perhaps inviting users to connect on LinkedIn, view projects on GitHub, or reach out via email.
-3.  **Styling (CSS)**:
-    *   Embed all CSS directly within the HTML file, either in `<style>` tags in the `<head>` or as inline styles.
-    *   The design should be visually appealing, modern, professional, and *personal*.
-    *   Use a good color palette (consider a unique but professional primary/accent color), excellent typography (web-safe fonts, clear hierarchy), and thoughtful layout.
-    *   Ensure the website is responsive and looks good on different screen sizes (desktop, tablet, mobile). Use a viewport meta tag.
-    *   Employ icons (e.g., from a simple SVG set or font icon if easily embeddable) to enhance visual appeal for contact info, section titles, or skills.
-4.  **Interactivity (JavaScript)**:
-    *   Embed all JavaScript directly within the HTML file in `<script>` tags, preferably at the end of the `<body>`.
-    *   Incorporate subtle animations, smooth scrolling for internal links, interactive elements (e.g., hover effects on cards, perhaps a simple filter for skills/projects if applicable and easy to implement).
-    *   The interactivity should enhance the user experience and modern feel, not be distracting.
-5.  **Favicon**: Include a simple, generic favicon in the `<head>`. This could be an appropriate emoji embedded as an SVG data URI, or a simple SVG icon.
-    *   Example Emoji Favicon: `<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>">` (Replace 📄 with a more suitable emoji like 🧑‍💻, 💼, ✨, or similar).
-6.  **Output Format**:
-    *   Ensure the output is ONLY the HTML code, starting with `<!DOCTYPE html>` and ending with `</html>`.
-    *   Do NOT include any markdown fences (like \\\\`\\\\`\\\\`html) or any other text, comments, or explanations outside the HTML itself.
-
-Strive for a polished, portfolio-quality website that the user would be proud to share.
-Remember, the output should be a *personal website*, not just a digital resume. Make it memorable, engaging, and reflective of a professional brand.
-Consider modern design trends and interactive patterns.
 """
 )
 
@@ -333,7 +421,7 @@ def _generate_website_plan(
 
     if is_resume:
         # Ensure "PLAN:" exists before splitting
-        if "PLAN:" in plan_output:
+        if 1 == 1:
             plan_content = plan_output.split("PLAN:", 1)[1].strip()
             if status_callback:
                 status_callback(
