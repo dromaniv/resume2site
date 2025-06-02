@@ -21,7 +21,7 @@ if "process_log_entries" not in st.session_state:
 if "display_html" not in st.session_state:
     st.session_state.display_html = False
 if "selected_mode" not in st.session_state:
-    st.session_state.selected_mode = "LLM (Direct Website)"
+    st.session_state.selected_mode = "AI Direct Build (Custom design & layout)"
 if "raw_text" not in st.session_state:
     st.session_state.raw_text = None
 if "website_plan" not in st.session_state:
@@ -313,10 +313,10 @@ def trigger_website_generation():
     PLAN_PREFIX = "📝 **Website Plan:**\\\\n```\\\\n"
     PLAN_SUFFIX = "\\\\n```"
 
-    if st.session_state.selected_mode == "LLM (Direct Website)":
-        st.subheader("LLM-Generated Website")
+    if st.session_state.selected_mode == "AI Direct Build (Custom design & layout)":
+        st.subheader("🎨 Custom AI Website Generation")
         with st.status(
-            "🚀 Starting Direct Website Generation...", expanded=True
+            "🤖 Creating custom website with AI...", expanded=True
         ) as status_ui:
 
             def status_update_callback(message: str):
@@ -328,7 +328,7 @@ def trigger_website_generation():
                     plan_text = message[len(PLAN_PREFIX):-len(PLAN_SUFFIX)]
                     st.session_state.website_plan = plan_text
                     status_ui.markdown(plan_content)
-                    status_ui.update(label="Plan displayed. Generating Website...")
+                    status_ui.update(label="✏️ Design plan created. Building your website...")
                 elif message.startswith("❌"):
                     status_ui.error(message)
                     st.session_state.process_log_entries.append(full_log_entry)
@@ -361,29 +361,29 @@ def trigger_website_generation():
                         pass  # Fail silently if server can't start
                     
                     status_ui.update(
-                        label="✅ Website generation complete!", state="complete"
+                        label="✅ Custom website created successfully!", state="complete"
                     )
                 else:
                     status_ui.update(
-                        label="⚠️ Website generation finished with issues or input error.",
+                        label="⚠️ Website creation completed with warnings.",
                         state="error",
                     )
             except Exception as e:
-                st.error(f"An unexpected error occurred during Website generation: {e}")
+                st.error(f"An unexpected error occurred during website creation: {e}")
                 status_ui.update(
-                    label="💥 Unexpected error during generation.", state="error"
+                    label="💥 Unexpected error during creation.", state="error"
                 )
                 st.session_state.process_log_entries.append(
                     f'{datetime.now().strftime("%H:%M:%S")} - Error: {e}'
                 )
 
-    elif st.session_state.selected_mode == "LLM (JSON + Template)":
-        st.subheader("LLM (JSON) + Template-Generated Website")
-        with st.spinner("Parsing resume with LLM (JSON)..."):
+    elif st.session_state.selected_mode == "AI Structured (Parsed data + Template)":
+        st.subheader("📊 Structured Data + Professional Template")
+        with st.spinner("🔍 Analyzing resume structure with AI..."):
             parsed_json = parse_resume_llm(st.session_state.raw_text)
-        st.success("✅ Resume parsed to JSON by LLM.")
+        st.success("✅ Resume data extracted and structured.")
         st.json(parsed_json)
-        with st.spinner("Generating Website from JSON with Template..."):
+        with st.spinner("🏗️ Building website from structured data..."):
             html_output = json_to_html(parsed_json, inline=True)
         st.session_state.generated_html = html_output
         st.session_state.display_html = True
@@ -395,15 +395,15 @@ def trigger_website_generation():
         except:
             pass  # Fail silently if server can't start
             
-        st.success("✅ Website generated from JSON (LLM) and template.")
+        st.success("✅ Professional website built from structured data.")
 
-    elif st.session_state.selected_mode == "Rule-based (JSON + Template)":
-        st.subheader("Rule-based (JSON) + Template-Generated Website")
-        with st.spinner("Parsing resume with Rules..."):
+    elif st.session_state.selected_mode == "Rule-based Parser (Pattern matching + Template)":
+        st.subheader("⚙️ Pattern-based Parsing + Clean Template")
+        with st.spinner("📋 Extracting resume sections using pattern matching..."):
             parsed_json = parse_resume_rule(st.session_state.raw_text)
-        st.success("✅ Resume parsed to JSON by Rules.")
+        st.success("✅ Resume sections identified and extracted.")
         st.json(parsed_json)
-        with st.spinner("Generating Website from JSON with Template..."):
+        with st.spinner("🎯 Assembling clean, structured website..."):
             html_output = json_to_html(parsed_json, inline=True)
         st.session_state.generated_html = html_output
         st.session_state.display_html = True
@@ -415,7 +415,7 @@ def trigger_website_generation():
         except:
             pass  # Fail silently if server can't start
             
-        st.success("✅ Website generated from JSON (Rules) and template.")
+        st.success("✅ Website assembled using pattern-based extraction.")
 
 
 # --- UI Elements & Main Control Logic ---
@@ -428,18 +428,18 @@ def on_mode_selection_change_callback():
 
 
 st.radio(
-    "Choose generation mode:",
+    "Select how to build your website:",
     options=[
-        "LLM (Direct Website)",
-        "LLM (JSON + Template)",
-        "Rule-based (JSON + Template)",
+        "AI Direct Build (Custom design & layout)",
+        "AI Structured (Parsed data + Template)",
+        "Rule-based Parser (Pattern matching + Template)",
     ],
     key="selected_mode",
     on_change=on_mode_selection_change_callback,
     index=[
-        "LLM (Direct Website)",
-        "LLM (JSON + Template)",
-        "Rule-based (JSON + Template)",
+        "AI Direct Build (Custom design & layout)",
+        "AI Structured (Parsed data + Template)",
+        "Rule-based Parser (Pattern matching + Template)",
     ].index(st.session_state.selected_mode),
 )
 
@@ -497,7 +497,7 @@ elif (
 # --- Display Area ---
 if st.session_state.display_html and st.session_state.generated_html:
     # Normal layout
-    st.subheader("🌐 Your Website")
+    st.subheader("🎯 Your Professional Website")
     
     # Action buttons in columns (removed fullscreen button)
     col1, col2, col3 = st.columns(3)
@@ -571,7 +571,7 @@ if st.session_state.display_html and st.session_state.generated_html:
         with st.container():
             st.metric("💾 Size", f"{html_size_kb:.1f} KB")
             st.metric("🔢 Elements", f"{word_count:,}")
-            mode_display = st.session_state.selected_mode.replace("LLM (Direct Website)", "Direct").replace("LLM (JSON + Template)", "LLM+Template").replace("Rule-based (JSON + Template)", "Rule-based")
+            mode_display = st.session_state.selected_mode.replace("AI Direct Build (Custom design & layout)", "AI Custom").replace("AI Structured (Parsed data + Template)", "AI+Template").replace("Rule-based Parser (Pattern matching + Template)", "Rule-based")
             st.metric("⚙️ Mode", mode_display)
             
             if changes_count > 0:
@@ -579,39 +579,39 @@ if st.session_state.display_html and st.session_state.generated_html:
     
     st.divider()
     
-    # --- SIMPLIFIED SINGLE CHAT INTERFACE ---
-    st.subheader("💬 Customize Your Website")
-    st.markdown("Describe what changes you'd like to make to your website:")
+    # --- WEBSITE REFINEMENT INTERFACE ---
+    st.subheader("✨ Refine & Perfect Your Website")
+    st.markdown("Tell the AI how to improve your website's design, content, or functionality:")
     
     # Create a clean chat interface
     with st.container():
         # Enhanced quick actions at the top of chat panel
-        with st.expander("🚀 Quick Actions", expanded=False):
+        with st.expander("⚡ One-Click Enhancements", expanded=False):
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
-                if st.button("🎨 Modern Colors", use_container_width=True, key="quick_colors", help="Apply a professional color scheme"):
+                if st.button("🎨 Professional Theme", use_container_width=True, key="quick_colors", help="Apply a modern professional color scheme"):
                     st.session_state.quick_action_pending = "Change the color scheme to a modern professional palette with blues, grays, and white. Use gradients and ensure good contrast for readability."
                     st.rerun()
             
             with col2:
-                if st.button("📱 Mobile Ready", use_container_width=True, key="quick_mobile", help="Make mobile responsive"):
+                if st.button("📱 Mobile Optimize", use_container_width=True, key="quick_mobile", help="Optimize for mobile devices"):
                     st.session_state.quick_action_pending = "Improve mobile responsiveness by making the layout stack vertically on small screens, adjusting font sizes, and ensuring touch-friendly buttons."
                     st.rerun()
             
             with col3:
-                if st.button("✨ Add Effects", use_container_width=True, key="quick_effects", help="Add animations and interactions"):
+                if st.button("✨ Add Animations", use_container_width=True, key="quick_effects", help="Add smooth animations and interactions"):
                     st.session_state.quick_action_pending = "Add smooth animations, hover effects on buttons and links, animated progress bars for skills, and subtle transitions throughout the site."
                     st.rerun()
             
             with col4:
-                if st.button("🔤 Better Fonts", use_container_width=True, key="quick_fonts", help="Improve typography"):
+                if st.button("🔤 Typography Upgrade", use_container_width=True, key="quick_fonts", help="Enhance fonts and text styling"):
                     st.session_state.quick_action_pending = "Improve typography by using modern Google Fonts like Inter or Roboto, creating better text hierarchy, and adding proper spacing between elements."
                     st.rerun()
         
         # Chat history
         if st.session_state.chat_messages:
-            st.markdown("**💭 Chat History:**")
+            st.markdown("**🔄 Refinement History:**")
             
             for message in st.session_state.chat_messages:
                 if message["role"] == "user":
@@ -621,8 +621,8 @@ if st.session_state.display_html and st.session_state.generated_html:
                     with st.chat_message("assistant"):
                         st.write(message["content"])
         else:
-            st.markdown("**💭 Start a conversation...**")
-            st.markdown("Use the chat input below or try one of the quick actions above!")
+            st.markdown("**🎯 Ready to improve your website?**")
+            st.markdown("Use the input below or select a quick enhancement option above!")
     
     # Chat input area with integrated clear button
     col_input, col_clear = st.columns([5, 1])
@@ -634,18 +634,18 @@ if st.session_state.display_html and st.session_state.generated_html:
             user_input = st.session_state.quick_action_pending
             st.session_state.quick_action_pending = None  # Clear it
         else:
-            user_input = st.chat_input("Describe what you'd like to change...")
+            user_input = st.chat_input("Tell me what you'd like to improve or change...")
     
     with col_clear:
         # Clear chat button integrated with input area
-        if st.button("🗑️", help="Clear chat history", key="clear_chat_btn", type="secondary", use_container_width=True):
+        if st.button("🗑️", help="Clear refinement history", key="clear_chat_btn", type="secondary", use_container_width=True):
             st.session_state.chat_messages = []
             st.rerun()
     
     if user_input:
         # Validate input
         if len(user_input.strip()) < 3:
-            st.warning("Please provide a more detailed description.")
+            st.warning("Please provide a more detailed description of what you'd like to improve.")
             st.stop()
         
         # Add user message to chat history
@@ -656,7 +656,7 @@ if st.session_state.display_html and st.session_state.generated_html:
             st.write(user_input)
         
         # Process the change request with simple status
-        with st.status("Processing your request...", expanded=True) as status:
+        with st.status("🔄 Applying your improvements...", expanded=True) as status:
             
             def status_callback(message: str):
                 status.write(message)
@@ -686,17 +686,17 @@ if st.session_state.display_html and st.session_state.generated_html:
                     except:
                         pass  # Fail silently if server can't restart
                     
-                    assistant_response = "✅ Changes applied successfully! Check the preview above."
+                    assistant_response = "✅ Improvements applied successfully! Check the updated preview above."
                     status.update(label="✅ Complete!", state="complete")
                     success = True
                 else:
-                    assistant_response = "⚠️ Could not apply changes properly. Please try rephrasing your request or be more specific."
+                    assistant_response = "⚠️ Could not apply improvements properly. Please try rephrasing your request or be more specific."
                     status.update(label="⚠️ Failed", state="error")
                     success = False
                 
             except Exception as e:
                 error_msg = str(e)
-                assistant_response = f"❌ Error processing request: {error_msg}. Please try a different approach."
+                assistant_response = f"❌ Error applying improvements: {error_msg}. Please try a different approach."
                 status.update(label="❌ Error", state="error")
                 success = False
             
@@ -727,7 +727,7 @@ elif not st.session_state.processed_pdf_name:
             <ul style="text-align: left; list-style: none; padding: 0;">
                 <li style="margin: 0.5rem 0;">🎨 Beautiful, professional design</li>
                 <li style="margin: 0.5rem 0;">📱 Mobile-responsive layout</li>
-                <li style="margin: 0.5rem 0;">💬 AI-powered customization chat</li>
+                <li style="margin: 0.5rem 0;">🤖 AI-powered website refinement</li>
                 <li style="margin: 0.5rem 0;">⚡ Instant preview and download</li>
                 <li style="margin: 0.5rem 0;">🌐 Shareable live URL</li>
             </ul>
