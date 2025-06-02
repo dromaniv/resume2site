@@ -507,6 +507,37 @@ if st.session_state.display_html and st.session_state.generated_html:
             st.button("🌐 New Tab", disabled=True, help="Server starting...", use_container_width=True)
     
     with col2:
+        if st.session_state.temp_server_url:
+            # URL display styled to match buttons
+            st.markdown(f"""
+            <div style="
+                background: linear-gradient(90deg, #2d2d2d 0%, #444 100%);
+                color: white;
+                border: 1px solid #555;
+                border-radius: 8px;
+                padding: 0.5rem 1rem;
+                font-family: monospace;
+                font-size: 0.875rem;
+                text-align: center;
+                word-break: break-all;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                height: 38px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                transition: all 0.3s ease;
+                cursor: pointer;
+            " title="{st.session_state.temp_server_url}" onclick="navigator.clipboard.writeText('{st.session_state.temp_server_url}')">
+                📋 {st.session_state.temp_server_url}
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.empty()  # Placeholder when no URL is available
+
+    with col3:
         st.download_button(
             label="📥 Download",
             data=st.session_state.generated_html,
@@ -515,13 +546,6 @@ if st.session_state.display_html and st.session_state.generated_html:
             help="Download the website as an HTML file",
             use_container_width=True
         )
-    
-    with col3:
-        if st.session_state.temp_server_url:
-            # Better URL display with copy functionality
-            st.text_input("🔗 URL:", value=st.session_state.temp_server_url, key="url_display", help="Copy this URL to share")
-        else:
-            st.empty()  # Placeholder when no URL is available
     
     st.divider()
     
@@ -556,59 +580,76 @@ if st.session_state.display_html and st.session_state.generated_html:
     st.subheader("💬 Customize Your Website")
     st.markdown("Describe what changes you'd like to make to your website:")
     
-    # Enhanced quick actions
-    st.markdown("**🚀 Quick Actions:**")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    quick_action_triggered = False
-    quick_action_text = ""
-    
-    with col1:
-        if st.button("🎨 Modern Colors", use_container_width=True, key="quick_colors", help="Apply a professional color scheme"):
-            quick_action_text = "Change the color scheme to a modern professional palette with blues, grays, and white. Use gradients and ensure good contrast for readability."
-            quick_action_triggered = True
-    
-    with col2:
-        if st.button("📱 Mobile Ready", use_container_width=True, key="quick_mobile", help="Make mobile responsive"):
-            quick_action_text = "Improve mobile responsiveness by making the layout stack vertically on small screens, adjusting font sizes, and ensuring touch-friendly buttons."
-            quick_action_triggered = True
-    
-    with col3:
-        if st.button("✨ Add Effects", use_container_width=True, key="quick_effects", help="Add animations and interactions"):
-            quick_action_text = "Add smooth animations, hover effects on buttons and links, animated progress bars for skills, and subtle transitions throughout the site."
-            quick_action_triggered = True
-    
-    with col4:
-        if st.button("🔤 Better Fonts", use_container_width=True, key="quick_fonts", help="Improve typography"):
-            quick_action_text = "Improve typography by using modern Google Fonts like Inter or Roboto, creating better text hierarchy, and adding proper spacing between elements."
-            quick_action_triggered = True
-    
-    st.divider()
-    
-    # Simple chat history using default Streamlit chat elements
-    if st.session_state.chat_messages:
-        st.markdown("**💭 Chat History:**")
+    # Create a clean chat interface
+    with st.container():
+        # Simple visual separator for the chat area
+        st.markdown("---")
         
-        for message in st.session_state.chat_messages:
-            if message["role"] == "user":
-                with st.chat_message("user"):
-                    st.write(message["content"])
-            else:
-                with st.chat_message("assistant"):
-                    st.write(message["content"])
+        # Enhanced quick actions at the top of chat panel
+        with st.expander("🚀 Quick Actions", expanded=False):
+            col1, col2, col3, col4 = st.columns(4)
+            
+            quick_action_triggered = False
+            quick_action_text = ""
+            
+            with col1:
+                if st.button("🎨 Modern Colors", use_container_width=True, key="quick_colors", help="Apply a professional color scheme"):
+                    quick_action_text = "Change the color scheme to a modern professional palette with blues, grays, and white. Use gradients and ensure good contrast for readability."
+                    quick_action_triggered = True
+            
+            with col2:
+                if st.button("📱 Mobile Ready", use_container_width=True, key="quick_mobile", help="Make mobile responsive"):
+                    quick_action_text = "Improve mobile responsiveness by making the layout stack vertically on small screens, adjusting font sizes, and ensuring touch-friendly buttons."
+                    quick_action_triggered = True
+            
+            with col3:
+                if st.button("✨ Add Effects", use_container_width=True, key="quick_effects", help="Add animations and interactions"):
+                    quick_action_text = "Add smooth animations, hover effects on buttons and links, animated progress bars for skills, and subtle transitions throughout the site."
+                    quick_action_triggered = True
+            
+            with col4:
+                if st.button("🔤 Better Fonts", use_container_width=True, key="quick_fonts", help="Improve typography"):
+                    quick_action_text = "Improve typography by using modern Google Fonts like Inter or Roboto, creating better text hierarchy, and adding proper spacing between elements."
+                    quick_action_triggered = True
         
-        # Clear chat button
-        if st.button("🗑️ Clear Chat", type="secondary"):
-            st.session_state.chat_messages = []
-            st.rerun()
-    
-    # Chat input using default Streamlit chat_input
-    user_input = None
-    if quick_action_triggered:
-        user_input = quick_action_text
-    else:
-        user_input = st.chat_input("Describe what you'd like to change...")
+        # Chat history
+        if st.session_state.chat_messages:
+            st.markdown("**💭 Chat History:**")
+            
+            for message in st.session_state.chat_messages:
+                if message["role"] == "user":
+                    with st.chat_message("user"):
+                        st.write(message["content"])
+                else:
+                    with st.chat_message("assistant"):
+                        st.write(message["content"])
+        else:
+            st.markdown("**💭 Start a conversation...**")
+            st.markdown("Use the text input below or try one of the quick actions above!")
+        
+        # Chat input integrated into the panel
+        user_input = None
+        if quick_action_triggered:
+            user_input = quick_action_text
+        else:
+            # Create a custom input layout with submit button
+            col_input, col_send, col_clear = st.columns([4, 1, 1])
+            with col_input:
+                text_input = st.text_input("💬 Your message:", placeholder="Describe what you'd like to change...", label_visibility="collapsed", key="chat_input")
+            with col_send:
+                send_clicked = st.button("📤", help="Send message", key="send_btn", use_container_width=True)
+            with col_clear:
+                # Small trash icon button
+                if st.button("🗑️", help="Clear chat history", key="clear_chat_btn", type="secondary", use_container_width=True):
+                    st.session_state.chat_messages = []
+                    # Clear the input field by resetting session state
+                    if "chat_input" in st.session_state:
+                        del st.session_state["chat_input"]
+                    st.rerun()
+            
+            # Handle input submission (either by Enter key or Send button)
+            if text_input.strip() or send_clicked:
+                user_input = text_input.strip() if text_input.strip() else None
     
     if user_input:
         # Validate input
@@ -628,6 +669,9 @@ if st.session_state.display_html and st.session_state.generated_html:
             
             def status_callback(message: str):
                 status.write(message)
+            
+            success = False
+            error_msg = None
             
             try:
                 # Apply the user's requested changes
@@ -653,20 +697,34 @@ if st.session_state.display_html and st.session_state.generated_html:
                     
                     assistant_response = "✅ Changes applied successfully! Check the preview above."
                     status.update(label="✅ Complete!", state="complete")
+                    success = True
                 else:
-                    assistant_response = "⚠️ Partial success. Please try rephrasing your request."
-                    status.update(label="⚠️ Partial", state="error")
+                    assistant_response = "⚠️ Could not apply changes properly. Please try rephrasing your request or be more specific."
+                    status.update(label="⚠️ Failed", state="error")
+                    success = False
                 
             except Exception as e:
-                assistant_response = f"❌ Error: {str(e)}. Please try a different request."
+                error_msg = str(e)
+                assistant_response = f"❌ Error processing request: {error_msg}. Please try a different approach."
                 status.update(label="❌ Error", state="error")
+                success = False
             
             # Add assistant response
             st.session_state.chat_messages.append({"role": "assistant", "content": assistant_response})
             
             # Show assistant response
             with st.chat_message("assistant"):
-                st.write(assistant_response)
+                if success:
+                    st.success(assistant_response)
+                else:
+                    if error_msg:
+                        st.error(assistant_response)
+                    else:
+                        st.warning(assistant_response)
+        
+        # Clear the input field after processing
+        if "chat_input" in st.session_state:
+            del st.session_state["chat_input"]
         
         # Rerun to refresh
         st.rerun()
