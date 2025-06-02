@@ -150,6 +150,47 @@ Instructions:
 """
 )
 
+_SYSTEM_PROMPT_USER_CHANGES = textwrap.dedent(
+    f"""\
+You are an expert web developer helping a user refine their personal website.
+The user has a generated website and wants to make specific changes to improve it.
+
+Current Website HTML:
+```html
+{{{{current_html}}}}
+```
+
+Original Résumé Text (for context):
+{{{{resume_text}}}}
+
+Website Plan (for context):
+{{{{website_plan}}}}
+
+User's Change Request:
+{{{{user_request}}}}
+
+Instructions:
+1. Carefully read and understand the user's change request.
+2. Apply the requested changes to the current HTML while maintaining the overall structure and quality.
+3. Common change types and how to handle them:
+   - **Color scheme changes**: Update CSS color variables and styles
+   - **Layout changes**: Modify CSS flexbox, grid, or positioning
+   - **Content additions**: Add new HTML elements with appropriate styling
+   - **Typography changes**: Update font families, sizes, weights in CSS
+   - **Interactive features**: Add or modify JavaScript functionality
+   - **Responsive design**: Ensure changes work across different screen sizes
+4. If the request is unclear, make reasonable interpretations that improve the site.
+5. Preserve all existing functionality and maintain the professional quality.
+6. Ensure all CSS remains in `<style>` tags or inline, and all JS remains in `<script>` tags.
+7. Keep the website responsive and maintain modern design principles.
+8. The output should be the complete, modified HTML code, starting with `<!DOCTYPE html>` and ending with `</html>`.
+9. Do NOT include any markdown fences (like \\`\\`\\`html) or any other text, comments, or explanations outside the HTML itself.
+
+Focus on making the requested changes while preserving the professional quality and functionality of the website.
+If you cannot implement a specific feature due to complexity, make a simpler version that achieves a similar visual effect.
+"""
+)
+
 
 def _extract_html(raw_html_output: str) -> str:
     """
@@ -450,3 +491,73 @@ def generate_html_llm(
         status_callback("💾 Caching final website version.")
     cache_path.write_text(current_html, encoding="utf-8")
     return current_html
+
+
+def apply_user_changes_llm(
+    current_html: str,
+    user_request: str,
+    resume_text: str = "",
+    website_plan: str = "",
+    status_callback: Callable[[str], None] | None = None
+) -> str:
+    """
+    Applies user-requested changes to the current website HTML using an LLM.
+
+    Args:
+        current_html: The current HTML website code
+        user_request: The user's change request
+        resume_text: Original resume text for context
+        website_plan: Website plan for context
+        status_callback: Optional function to call with status updates
+
+    Returns:
+        Modified HTML code with the requested changes applied
+    """
+    if status_callback:
+        status_callback("🔄 Processing your change request...")
+
+    # Prepare the prompt with user request and current HTML
+    prompt_changes = _SYSTEM_PROMPT_USER_CHANGES.replace("{{current_html}}", current_html)
+    prompt_changes = prompt_changes.replace("{{resume_text}}", resume_text)
+    prompt_changes = prompt_changes.replace("{{website_plan}}", website_plan)
+    prompt_changes = prompt_changes.replace("{{user_request}}", user_request)
+
+    messages = [
+        {"role": "system", "content": prompt_changes},
+        {
+            "role": "user",
+            "content": f"Please apply the following changes to my website: {user_request}",
+        },
+    ]
+
+    if status_callback:
+        status_callback("🤖 Calling LLM to apply changes...")
+
+    try:
+        rsp = chat(model=_MODEL, messages=messages)
+        raw_output = rsp.message.content
+        modified_html = _extract_html(raw_output)
+
+        if status_callback:
+            status_callback("🔍 Validating modified website...")
+
+        # Validate the modified HTML
+        validation_errors = _validate_html_css(modified_html)
+
+        if validation_errors:
+            if status_callback:
+                status_callback(f"⚠️ Validation found {len(validation_errors)} issues, but applying changes anyway.")
+            # Note: We could implement a fixing loop here like in generate_html_llm, 
+            # but for user changes, we'll be more permissive
+        else:
+            if status_callback:
+                status_callback("✅ Modified website validation passed!")
+
+        return modified_html
+
+    except Exception as e:
+        error_msg = f"Error applying changes: {str(e)}"
+        if status_callback:
+            status_callback(f"❌ {error_msg}")
+        print(error_msg)
+        return current_html  # Return original HTML if changes failed

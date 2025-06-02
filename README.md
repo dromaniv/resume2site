@@ -6,10 +6,11 @@ Upload a PDF résumé → Get a dynamic, LLM-generated personal website!
 - **LLM-Powered Website Generation**: Directly creates modern, interactive websites from your résumé using multiple LLM providers (OpenAI GPT models or Ollama with Devstral).
 - **Multiple LLM Providers**: Easy switching between OpenAI API and Ollama with a modular architecture.
 - **Website Plan**: The LLM first analyzes the résumé and proposes a "website plan," which is displayed in the UI.
+- **Interactive Website Refinement**: After generation, use the built-in chat interface to request changes and improvements to your website.
 - **Automatic Generation**: Website generation starts automatically upon PDF upload or when changing generation modes.
 - **Enhanced Preview**: View the generated website directly in the app with an enlarged preview pane.
 - **Multiple Generation Modes**:
-    - **LLM (Direct Website)**: The full LLM-powered generation with planning and validation.
+    - **LLM (Direct Website)**: The full LLM-powered generation with planning and validation, plus interactive refinement.
     - **LLM (JSON + Template)**: Parses the résumé to JSON using an LLM, then uses a Jinja2 template.
     - **Rule-based (JSON + Template)**: Parses the résumé to JSON using traditional rules, then uses a Jinja2 template.
 - **Caching**: LLM responses for plans and generated websites are cached to speed up subsequent runs with the same input.
@@ -70,7 +71,32 @@ Upload a PDF résumé → Get a dynamic, LLM-generated personal website!
    - Upload a PDF resume
    - Choose your preferred generation mode.
    - View the plan (for LLM Direct Website mode) and the generation process.
-   - Preview and download your generated website!
+   - Preview your generated website!
+   - **Use the chat interface** to request changes and improvements to your website.
+
+---
+
+## 💬 Interactive Website Refinement
+
+After your website is generated, you can use the built-in chat interface to make changes:
+
+### Quick Actions
+- **🎨 Change Colors**: Request color scheme updates
+- **📱 Improve Mobile**: Enhance mobile responsiveness  
+- **✨ Add Animations**: Add hover effects and smooth transitions
+- **🔤 Improve Typography**: Enhance fonts and text styling
+
+### Example Requests
+- "Change the color scheme to blue and white"
+- "Add a dark mode toggle"
+- "Make the skills section more visually appealing with progress bars"
+- "Add hover effects to the project cards"
+- "Increase the font size for better readability"
+- "Add social media icons to the contact section"
+- "Reorganize the layout to put projects before experience"
+- "Add a professional photo placeholder"
+
+The LLM will process your request and update the website in real-time!
 
 ---
 
@@ -104,34 +130,3 @@ app/
 - The LLM modes cache results (website plans and final HTML) in the `.cache/` directory to avoid redundant LLM queries.
 - The in-app preview displays the website with all CSS and JS embedded.
 - The download button provides a single `website.html` file.
-
----
-
-## 🔄 Switching Between LLM Providers
-
-The application supports both OpenAI API and Ollama with a modular architecture. You can easily switch between providers:
-
-### Environment Variables
-Set the `LLM_PROVIDER` environment variable:
-```powershell
-# For OpenAI (default)
-$env:LLM_PROVIDER="openai"
-$env:OPENAI_API_KEY="your_api_key_here"
-
-# For Ollama
-$env:LLM_PROVIDER="ollama"
-```
-
-### Configuration File
-Modify `app/config.py` to change the default provider:
-```python
-LLM_PROVIDER = "openai"  # or "ollama"
-```
-
-### Model Mapping
-- When using OpenAI, the `devstral` model is automatically mapped to `gpt-4o-mini`
-- You can modify the model mappings in `app/config.py`
-
-### Cost Considerations
-- **OpenAI**: Pay-per-use API with excellent quality
-- **Ollama**: Free local models but requires local setup and computational resources
