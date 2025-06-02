@@ -39,6 +39,9 @@ if "processed_pdf_name" not in st.session_state:
 # Flag to trigger regeneration when mode changes and a PDF is already processed
 if "mode_changed_flag" not in st.session_state:
     st.session_state.mode_changed_flag = False
+# Pending quick action text to be processed in next render cycle
+if "quick_action_pending" not in st.session_state:
+    st.session_state.quick_action_pending = None
 
 st.set_page_config(layout="wide", page_title="Résumé-to-Site")
 
@@ -589,28 +592,25 @@ if st.session_state.display_html and st.session_state.generated_html:
         with st.expander("🚀 Quick Actions", expanded=False):
             col1, col2, col3, col4 = st.columns(4)
             
-            quick_action_triggered = False
-            quick_action_text = ""
-            
             with col1:
                 if st.button("🎨 Modern Colors", use_container_width=True, key="quick_colors", help="Apply a professional color scheme"):
-                    quick_action_text = "Change the color scheme to a modern professional palette with blues, grays, and white. Use gradients and ensure good contrast for readability."
-                    quick_action_triggered = True
+                    st.session_state.quick_action_pending = "Change the color scheme to a modern professional palette with blues, grays, and white. Use gradients and ensure good contrast for readability."
+                    st.rerun()
             
             with col2:
                 if st.button("📱 Mobile Ready", use_container_width=True, key="quick_mobile", help="Make mobile responsive"):
-                    quick_action_text = "Improve mobile responsiveness by making the layout stack vertically on small screens, adjusting font sizes, and ensuring touch-friendly buttons."
-                    quick_action_triggered = True
+                    st.session_state.quick_action_pending = "Improve mobile responsiveness by making the layout stack vertically on small screens, adjusting font sizes, and ensuring touch-friendly buttons."
+                    st.rerun()
             
             with col3:
                 if st.button("✨ Add Effects", use_container_width=True, key="quick_effects", help="Add animations and interactions"):
-                    quick_action_text = "Add smooth animations, hover effects on buttons and links, animated progress bars for skills, and subtle transitions throughout the site."
-                    quick_action_triggered = True
+                    st.session_state.quick_action_pending = "Add smooth animations, hover effects on buttons and links, animated progress bars for skills, and subtle transitions throughout the site."
+                    st.rerun()
             
             with col4:
                 if st.button("🔤 Better Fonts", use_container_width=True, key="quick_fonts", help="Improve typography"):
-                    quick_action_text = "Improve typography by using modern Google Fonts like Inter or Roboto, creating better text hierarchy, and adding proper spacing between elements."
-                    quick_action_triggered = True
+                    st.session_state.quick_action_pending = "Improve typography by using modern Google Fonts like Inter or Roboto, creating better text hierarchy, and adding proper spacing between elements."
+                    st.rerun()
         
         # Chat history
         if st.session_state.chat_messages:
@@ -625,31 +625,25 @@ if st.session_state.display_html and st.session_state.generated_html:
                         st.write(message["content"])
         else:
             st.markdown("**💭 Start a conversation...**")
-            st.markdown("Use the text input below or try one of the quick actions above!")
-        
-        # Chat input integrated into the panel
+            st.markdown("Use the chat input below or try one of the quick actions above!")
+    
+    # Chat input area with integrated clear button
+    col_input, col_clear = st.columns([5, 1])
+    
+    with col_input:
+        # Check for pending quick action
         user_input = None
-        if quick_action_triggered:
-            user_input = quick_action_text
+        if hasattr(st.session_state, 'quick_action_pending') and st.session_state.quick_action_pending:
+            user_input = st.session_state.quick_action_pending
+            st.session_state.quick_action_pending = None  # Clear it
         else:
-            # Create a custom input layout with submit button
-            col_input, col_send, col_clear = st.columns([4, 1, 1])
-            with col_input:
-                text_input = st.text_input("💬 Your message:", placeholder="Describe what you'd like to change...", label_visibility="collapsed", key="chat_input")
-            with col_send:
-                send_clicked = st.button("📤", help="Send message", key="send_btn", use_container_width=True)
-            with col_clear:
-                # Small trash icon button
-                if st.button("🗑️", help="Clear chat history", key="clear_chat_btn", type="secondary", use_container_width=True):
-                    st.session_state.chat_messages = []
-                    # Clear the input field by resetting session state
-                    if "chat_input" in st.session_state:
-                        del st.session_state["chat_input"]
-                    st.rerun()
-            
-            # Handle input submission (either by Enter key or Send button)
-            if text_input.strip() or send_clicked:
-                user_input = text_input.strip() if text_input.strip() else None
+            user_input = st.chat_input("Describe what you'd like to change...")
+    
+    with col_clear:
+        # Clear chat button integrated with input area
+        if st.button("🗑️", help="Clear chat history", key="clear_chat_btn", type="secondary", use_container_width=True):
+            st.session_state.chat_messages = []
+            st.rerun()
     
     if user_input:
         # Validate input
@@ -721,10 +715,6 @@ if st.session_state.display_html and st.session_state.generated_html:
                         st.error(assistant_response)
                     else:
                         st.warning(assistant_response)
-        
-        # Clear the input field after processing
-        if "chat_input" in st.session_state:
-            del st.session_state["chat_input"]
         
         # Rerun to refresh
         st.rerun()
