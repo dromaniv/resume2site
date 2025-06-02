@@ -344,11 +344,19 @@ def trigger_website_generation():
                 )
                 st.session_state.generated_html = html_output
                 st.session_state.display_html = True
+                
+                # Auto-start server when website is generated
                 if (
                     "Error" not in html_output
                     and "Input Error" not in html_output
                     and "Processing Error" not in html_output
                 ):
+                    try:
+                        url = serve_html_temporarily(html_output)
+                        st.session_state.temp_server_url = url
+                    except:
+                        pass  # Fail silently if server can't start
+                    
                     status_ui.update(
                         label="✅ Website generation complete!", state="complete"
                     )
@@ -376,6 +384,14 @@ def trigger_website_generation():
             html_output = json_to_html(parsed_json, inline=True)
         st.session_state.generated_html = html_output
         st.session_state.display_html = True
+        
+        # Auto-start server when website is generated
+        try:
+            url = serve_html_temporarily(html_output)
+            st.session_state.temp_server_url = url
+        except:
+            pass  # Fail silently if server can't start
+            
         st.success("✅ Website generated from JSON (LLM) and template.")
 
     elif st.session_state.selected_mode == "Rule-based (JSON + Template)":
@@ -388,6 +404,14 @@ def trigger_website_generation():
             html_output = json_to_html(parsed_json, inline=True)
         st.session_state.generated_html = html_output
         st.session_state.display_html = True
+        
+        # Auto-start server when website is generated
+        try:
+            url = serve_html_temporarily(html_output)
+            st.session_state.temp_server_url = url
+        except:
+            pass  # Fail silently if server can't start
+            
         st.success("✅ Website generated from JSON (Rules) and template.")
 
 
@@ -476,20 +500,11 @@ if st.session_state.display_html and st.session_state.generated_html:
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        # Improved new tab functionality
-        if not st.session_state.temp_server_url:
-            if st.button("🌐 New Tab", help="Open website in new browser tab", use_container_width=True):
-                try:
-                    # Start temporary server and get URL
-                    url = serve_html_temporarily(st.session_state.generated_html)
-                    st.session_state.temp_server_url = url
-                    st.success("✅ Server started!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Failed to create local server: {str(e)}")
+        # Direct link button since server starts automatically
+        if st.session_state.temp_server_url:
+            st.link_button("🌐 Open New Tab", st.session_state.temp_server_url, use_container_width=True)
         else:
-            # Show link button when server is ready
-            st.link_button("🚀 Open Website", st.session_state.temp_server_url, use_container_width=True)
+            st.button("🌐 New Tab", disabled=True, help="Server starting...", use_container_width=True)
     
     with col2:
         st.download_button(
@@ -534,12 +549,6 @@ if st.session_state.display_html and st.session_state.generated_html:
             
             if changes_count > 0:
                 st.metric("✨ Changes", changes_count)
-            
-            # Server status
-            if st.session_state.temp_server_url:
-                st.success("🟢 Live Server Active")
-            else:
-                st.info("⚪ Server Inactive")
     
     st.divider()
     
@@ -633,6 +642,15 @@ if st.session_state.display_html and st.session_state.generated_html:
                 # Check if successful
                 if modified_html and len(modified_html) > 100:
                     st.session_state.generated_html = modified_html
+                    
+                    # Restart server with updated HTML
+                    try:
+                        cleanup_temp_server()  # Clean up old server
+                        url = serve_html_temporarily(modified_html)
+                        st.session_state.temp_server_url = url
+                    except:
+                        pass  # Fail silently if server can't restart
+                    
                     assistant_response = "✅ Changes applied successfully! Check the preview above."
                     status.update(label="✅ Complete!", state="complete")
                 else:
@@ -682,11 +700,10 @@ st.markdown("""
 <div class="dark-footer">
     <p style="margin: 0; font-size: 0.9rem;">
         <strong>📄 → 🌐 Résumé-to-Site</strong> | Powered by AI | 
-        <a href="#" style="color: #667eea; text-decoration: none;">Documentation</a> | 
-        <a href="#" style="color: #667eea; text-decoration: none;">Support</a>
+        <a href="https://github.com/dromaniv/resume2site/blob/main/README.md" target="_blank" style="color: #667eea; text-decoration: none;">Documentation</a>
     </p>
     <p style="margin: 0.5rem 0 0 0; font-size: 0.8rem; opacity: 0.7;">
-        © 2024 | Transform your career, one website at a time ✨
+        © 2025 | Transform your career, one website at a time ✨
     </p>
 </div>
 """, unsafe_allow_html=True)

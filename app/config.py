@@ -17,7 +17,7 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")  # Changed default to OpenAI
 # For Ollama: use models like "devstral", "llama2", etc.
 # For OpenAI: use models like "gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo", etc.
 DEFAULT_MODEL = {
-    "ollama": "devstral",
+    "ollama": "deepseek-coder-v2",
     "openai": "gpt-4o-mini"  # Good balance of performance and cost
 }
 
