@@ -3,7 +3,8 @@
 Upload a PDF résumé → Get a dynamic, LLM-generated personal website!
 
 ✨ **Key Features** ✨
-- **LLM-Powered Website Generation**: Directly creates modern, interactive websites from your résumé using an LLM (Devstral via Ollama).
+- **LLM-Powered Website Generation**: Directly creates modern, interactive websites from your résumé using multiple LLM providers (OpenAI GPT models or Ollama with Devstral).
+- **Multiple LLM Providers**: Easy switching between OpenAI API and Ollama with a modular architecture.
 - **Website Plan**: The LLM first analyzes the résumé and proposes a "website plan," which is displayed in the UI.
 - **Automatic Generation**: Website generation starts automatically upon PDF upload or when changing generation modes.
 - **Enhanced Preview**: View the generated website directly in the app with an enlarged preview pane.
@@ -35,8 +36,25 @@ Upload a PDF résumé → Get a dynamic, LLM-generated personal website!
    pip install -r requirements.txt
    ```
 
-4. **Start Ollama (if using LLM mode)**
+4. **Configure LLM Provider**
+   
+   **Option A: Using OpenAI API (Recommended)**
+   - Set your OpenAI API key as an environment variable:
+     ```powershell
+     $env:OPENAI_API_KEY="your_openai_api_key_here"
+     ```
+   - Or create a `.env` file in the project root:
+     ```
+     LLM_PROVIDER=openai
+     OPENAI_API_KEY=your_openai_api_key_here
+     ```
+   
+   **Option B: Using Ollama (Local)**
    - Install Ollama if you don't have it: https://ollama.com
+   - Set the environment variable:
+     ```powershell
+     $env:LLM_PROVIDER="ollama"
+     ```
    - Run locally:
      ```bash
      ollama run devstral
@@ -65,6 +83,8 @@ app/
  ├── parser_rule.py   # Rule-based résumé to JSON parser
  ├── generator_llm.py # LLM-based résumé to Website generator (direct HTML)
  ├── generator_rule.py# Renders HTML from JSON using templates (formerly generator.py)
+ ├── llm_client.py    # LLM abstraction layer for multiple providers
+ ├── config.py        # Configuration for LLM providers and models
  ├── cleaner.py       # Schema normalizer and data cleanup
  ├── schema_resume.py # Base JSON schema for résumé data
  ├── gui.py           # Main Streamlit application UI and logic
@@ -81,6 +101,37 @@ app/
 ## ⚡ Quick Notes
 
 - The **LLM (Direct Website)** mode is the most advanced, offering features like website planning and HTML/CSS validation.
-- The LLM modes cache results (website plans and final HTML) in the `.cache/` directory to avoid redundant Ollama queries.
+- The LLM modes cache results (website plans and final HTML) in the `.cache/` directory to avoid redundant LLM queries.
 - The in-app preview displays the website with all CSS and JS embedded.
 - The download button provides a single `website.html` file.
+
+---
+
+## 🔄 Switching Between LLM Providers
+
+The application supports both OpenAI API and Ollama with a modular architecture. You can easily switch between providers:
+
+### Environment Variables
+Set the `LLM_PROVIDER` environment variable:
+```powershell
+# For OpenAI (default)
+$env:LLM_PROVIDER="openai"
+$env:OPENAI_API_KEY="your_api_key_here"
+
+# For Ollama
+$env:LLM_PROVIDER="ollama"
+```
+
+### Configuration File
+Modify `app/config.py` to change the default provider:
+```python
+LLM_PROVIDER = "openai"  # or "ollama"
+```
+
+### Model Mapping
+- When using OpenAI, the `devstral` model is automatically mapped to `gpt-4o-mini`
+- You can modify the model mappings in `app/config.py`
+
+### Cost Considerations
+- **OpenAI**: Pay-per-use API with excellent quality
+- **Ollama**: Free local models but requires local setup and computational resources

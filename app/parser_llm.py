@@ -1,6 +1,7 @@
 """
-LLM-based résumé parser (Devstral from Mistral).
+LLM-based résumé parser.
 
+• Supports multiple LLM providers (Ollama with Devstral, OpenAI with GPT models)
 • Caches responses in .cache/<sha256>.json so the model is
   queried only once per unique resume text.
 • Runs clean_resume() to de-camel titles, format phone, etc.
@@ -9,13 +10,19 @@ LLM-based résumé parser (Devstral from Mistral).
 from __future__ import annotations
 import json, os, re, textwrap
 from pathlib import Path
-from ollama import chat
+from llm_client import chat
 
 from schema_resume import RESUME_SCHEMA
 from cleaner import clean_resume
 from utils import _sha
 
-_MODEL = "devstral"
+# Model and cache configuration
+try:
+    from config import get_model_for_provider
+    _MODEL = get_model_for_provider()
+except ImportError:
+    _MODEL = "devstral"  # Fallback if config is not available
+
 _CACHE_DIR = Path(".cache")
 _CACHE_DIR.mkdir(exist_ok=True)
 

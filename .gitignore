@@ -1,4 +1,6 @@
 .venv
 .cache
 __pycache__
+.idea
 .venv_resume2website
+.env

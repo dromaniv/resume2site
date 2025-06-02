@@ -1,15 +1,17 @@
 """
-LLM-based HTML website generator (Devstral from Mistral).
+LLM-based HTML website generator.
 
+• Supports multiple LLM providers (Ollama with Devstral, OpenAI with GPT models)
 • Caches responses in .cache/html/<sha256>.html so the model is
   queried only once per unique resume text.
 • Includes basic HTML and CSS validation and a retry mechanism for fixes.
 """
 
 from __future__ import annotations
+import re
 import textwrap
 from pathlib import Path
-from ollama import chat
+from llm_client import chat
 from bs4 import BeautifulSoup
 import html5lib  # For HTML5 parsing
 import cssutils
@@ -23,7 +25,11 @@ from utils import _sha
 cssutils.log.setLevel(logging.CRITICAL)  # Only show critical errors from cssutils
 
 # Model and cache configuration
-_MODEL = "deepseek-coder-v2"
+try:
+    from config import get_model_for_provider
+    _MODEL = get_model_for_provider()
+except ImportError:
+    _MODEL = "devstral"  # Fallback if config is not available
 
 # Determine project root from this file's location
 # app/generator_llm.py -> app.parent is app/ -> app.parent.parent is project root
@@ -440,7 +446,6 @@ def generate_html_llm(
             )  # Cache the last attempt anyway
             return current_html
 
-    # Cache and return the final HTML
     if status_callback:
         status_callback("💾 Caching final website version.")
     cache_path.write_text(current_html, encoding="utf-8")
