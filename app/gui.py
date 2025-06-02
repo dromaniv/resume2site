@@ -1,10 +1,15 @@
 import streamlit as st
+
+# MUST be the first Streamlit command
+st.set_page_config(layout="wide", page_title="Résumé-to-Site")
+
 import tempfile
 from pathlib import Path
 from datetime import datetime
 import urllib.parse  # Added for data URI encoding
 import webbrowser
 import time
+import atexit
 
 from extractor import pdf_to_text
 from parser_llm import parse_resume_llm
@@ -12,6 +17,39 @@ from generator_llm import generate_html_llm, apply_user_changes_llm
 from generator_rule import json_to_html
 from parser_rule import parse_resume_rule
 from temp_server import serve_html_temporarily, cleanup_temp_server
+
+# Register cleanup function to run when Streamlit exits
+atexit.register(cleanup_temp_server)
+
+# Add session-based cleanup for Streamlit
+@st.cache_resource
+def get_session_cleanup():
+    """Register cleanup for current Streamlit session"""
+    import weakref
+    
+    def cleanup():
+        cleanup_temp_server()
+    
+    # Create a weakref callback that will be called when the session ends
+    class SessionCleanup:
+        def __init__(self):
+            self.cleanup_func = cleanup
+            
+        def __del__(self):
+            try:
+                self.cleanup_func()
+            except:
+                pass  # Ignore cleanup errors during session end
+    
+    return SessionCleanup()
+
+# Initialize cleanup for this session
+session_cleanup = get_session_cleanup()
+
+# Add cleanup on script rerun
+if "server_cleanup_registered" not in st.session_state:
+    st.session_state.server_cleanup_registered = True
+    # This will be cleaned up when session state is cleared
 
 # Initialize session state variables
 if "generated_html" not in st.session_state:
@@ -42,8 +80,6 @@ if "mode_changed_flag" not in st.session_state:
 # Pending quick action text to be processed in next render cycle
 if "quick_action_pending" not in st.session_state:
     st.session_state.quick_action_pending = None
-
-st.set_page_config(layout="wide", page_title="Résumé-to-Site")
 
 # Simple title with default Streamlit styling
 st.title("📄 → 🌐 Résumé-to-Site")
@@ -357,8 +393,8 @@ def trigger_website_generation():
                     try:
                         url = serve_html_temporarily(html_output)
                         st.session_state.temp_server_url = url
-                    except:
-                        pass  # Fail silently if server can't start
+                    except Exception as e:
+                        st.warning(f"Could not start preview server: {e}")
                     
                     status_ui.update(
                         label="✅ Custom website created successfully!", state="complete"
@@ -392,8 +428,8 @@ def trigger_website_generation():
         try:
             url = serve_html_temporarily(html_output)
             st.session_state.temp_server_url = url
-        except:
-            pass  # Fail silently if server can't start
+        except Exception as e:
+            st.warning(f"Could not start preview server: {e}")
             
         st.success("✅ Professional website built from structured data.")
 
@@ -412,8 +448,8 @@ def trigger_website_generation():
         try:
             url = serve_html_temporarily(html_output)
             st.session_state.temp_server_url = url
-        except:
-            pass  # Fail silently if server can't start
+        except Exception as e:
+            st.warning(f"Could not start preview server: {e}")
             
         st.success("✅ Website assembled using pattern-based extraction.")
 
@@ -678,13 +714,12 @@ if st.session_state.display_html and st.session_state.generated_html:
                 if modified_html and len(modified_html) > 100:
                     st.session_state.generated_html = modified_html
                     
-                    # Restart server with updated HTML
+                    # Update server with new HTML content
                     try:
-                        cleanup_temp_server()  # Clean up old server
                         url = serve_html_temporarily(modified_html)
                         st.session_state.temp_server_url = url
-                    except:
-                        pass  # Fail silently if server can't restart
+                    except Exception as e:
+                        st.warning(f"Could not update preview server: {e}")
                     
                     assistant_response = "✅ Improvements applied successfully! Check the updated preview above."
                     status.update(label="✅ Complete!", state="complete")
@@ -735,10 +770,6 @@ elif not st.session_state.processed_pdf_name:
         <p style="font-size: 1rem; opacity: 0.9;">👆 Upload your PDF résumé above to get started!</p>
     </div>
     """, unsafe_allow_html=True)
-
-# Cleanup temp server on app exit
-import atexit
-atexit.register(cleanup_temp_server)
 
 st.markdown("---")
 st.markdown("""
