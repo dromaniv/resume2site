@@ -6,10 +6,9 @@ Upload a PDF résumé → Get a dynamic, LLM-generated personal website!
 - **LLM-Powered Website Generation**: Directly creates modern, interactive websites from your résumé using an LLM (Devstral via Ollama).
 - **Website Plan**: The LLM first analyzes the résumé and proposes a "website plan," which is displayed in the UI.
 - **Automatic Generation**: Website generation starts automatically upon PDF upload or when changing generation modes.
-- **Quality Analysis & Tweaks**: Includes an automated step to analyze the generated website for visual clarity, link validity, and basic accessibility, then prompts the LLM to make improvements.
 - **Enhanced Preview**: View the generated website directly in the app with an enlarged preview pane.
 - **Multiple Generation Modes**:
-    - **LLM (Direct Website)**: The full LLM-powered generation with planning and quality tweaks.
+    - **LLM (Direct Website)**: The full LLM-powered generation with planning and validation.
     - **LLM (JSON + Template)**: Parses the résumé to JSON using an LLM, then uses a Jinja2 template.
     - **Rule-based (JSON + Template)**: Parses the résumé to JSON using traditional rules, then uses a Jinja2 template.
 - **Caching**: LLM responses for plans and generated websites are cached to speed up subsequent runs with the same input.
@@ -81,7 +80,7 @@ app/
 
 ## ⚡ Quick Notes
 
-- The **LLM (Direct Website)** mode is the most advanced, offering features like website planning and quality-driven iterative improvements.
+- The **LLM (Direct Website)** mode is the most advanced, offering features like website planning and HTML/CSS validation.
 - The LLM modes cache results (website plans and final HTML) in the `.cache/` directory to avoid redundant Ollama queries.
 - The in-app preview displays the website with all CSS and JS embedded.
 - The download button provides a single `website.html` file.

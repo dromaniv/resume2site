@@ -7,7 +7,6 @@ LLM-based HTML website generator (Devstral from Mistral).
 """
 
 from __future__ import annotations
-import re
 import textwrap
 from pathlib import Path
 from ollama import chat
@@ -24,7 +23,7 @@ from utils import _sha
 cssutils.log.setLevel(logging.CRITICAL)  # Only show critical errors from cssutils
 
 # Model and cache configuration
-_MODEL = "devstral"
+_MODEL = "deepseek-coder-v2"
 
 # Determine project root from this file's location
 # app/generator_llm.py -> app.parent is app/ -> app.parent.parent is project root
@@ -35,7 +34,6 @@ _PLAN_CACHE_DIR = _PROJECT_ROOT / ".cache" / "plans"  # Cache for plans
 _HTML_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 _PLAN_CACHE_DIR.mkdir(parents=True, exist_ok=True)  # Create plan cache directory
 _MAX_FIX_ATTEMPTS = 2  # Maximum attempts to fix HTML/CSS issues
-_MAX_VISUAL_TWEAK_ATTEMPTS = 1  # Maximum attempts for visual tweaks
 
 _SYSTEM_PROMPT_PLAN = textwrap.dedent(
     f"""\
@@ -146,30 +144,6 @@ Instructions:
 """
 )
 
-_SYSTEM_PROMPT_QUALITY_TWEAKS = textwrap.dedent(
-    f"""\
-You are an expert web designer and developer. You previously generated an HTML website that is structurally valid,
-but it could be improved for overall quality (including visual clarity, accessibility, and basic functionality) based on the following suggestions.
-
-Original Résumé Text (for context, do not regenerate from this, only tweak the HTML):\n{{{{resume_text}}}}
-
-Website Plan (for context):\n{{{{website_plan}}}}
-
-Current HTML:\n```html\n{{{{current_html}}}}\n```
-
-Quality Improvement Suggestions:\n```\n{{{{quality_feedback}}}}\n```
-
-Instructions:
-
-1.  Carefully review the quality improvement suggestions.
-2.  Modify the `current_html` to address these suggestions. Focus on CSS adjustments, minor HTML structural changes for layout/accessibility, or fixing simple issues like broken internal links if feasible.
-3.  Do NOT significantly alter the content or the core structure defined by the website plan.
-4.  Ensure all CSS is in `<style>` tags or inline, and all JS is in `<script>` tags.
-5.  The output should be the complete, tweaked HTML code, starting with `<!DOCTYPE html>` and ending with `</html>`.
-6.  Do NOT include any markdown fences (like \\\\`\\\\`\\\\`html) or any other text, comments, or explanations outside the HTML itself.
-"""
-)
-
 
 def _extract_html(raw_html_output: str) -> str:
     """
@@ -256,183 +230,6 @@ def _validate_html_css(html_content: str) -> list[str]:
             errors.extend(current_css_errors)
 
     return errors
-
-
-def _analyze_website_quality(html_content: str) -> list[str]:
-    """
-    Performs a heuristic analysis of the HTML for potential quality issues (visual, accessibility, basic functionality).
-    Returns a list of textual feedback/suggestions.
-    """
-    feedback = []
-    soup = BeautifulSoup(html_content, "html.parser")
-
-    # --- Visual Clarity Checks (existing) ---
-    # 1. Viewport meta tag
-    if not soup.find("meta", attrs={"name": "viewport"}):
-        feedback.append(
-            'Visual: Consider adding a viewport meta tag for responsiveness: <meta name=\\"viewport\\" content=\\"width=device-width, initial-scale=1.0\\">.'
-        )
-
-    # 2. Basic font size
-    body_style = soup.body.get("style", "") if soup.body else ""
-    style_tags = soup.find_all("style")
-    body_font_size = None
-    # Check inline style on body
-    if "font-size" in body_style:
-        match = re.search(r"font-size:\\s*(\\d+)px", body_style)
-        if match:
-            body_font_size = int(match.group(1))
-
-    # Check style tags for body font-size (simplified: looks for 'body {' and 'font-size')
-    if not body_font_size:
-        for tag in style_tags:
-            if tag.string and "body {" in tag.string and "font-size" in tag.string:
-                match = re.search(
-                    r"body\\s*{[^}]*font-size:\\s*(\\d+)px", tag.string, re.DOTALL
-                )
-                if match:
-                    body_font_size = int(match.group(1))
-                    break
-
-    if body_font_size and body_font_size < 14:
-        feedback.append(
-            f"Visual: Base body font size ({body_font_size}px) seems small. Consider increasing to 14-16px for readability."
-        )
-    elif not body_font_size:
-        feedback.append(
-            "Visual: Consider explicitly setting a base font-size for the body (e.g., 16px) for consistent readability."
-        )
-
-    # 3. Heading differentiation
-    h1_tags = soup.find_all("h1")
-    h2_tags = soup.find_all("h2")
-    p_tags = soup.find_all("p")
-
-    # This is a very rough check. Real check needs computed styles.
-    if h1_tags and p_tags:
-        feedback.append(
-            "Visual: Ensure <h1> headings are significantly larger than paragraph text for clear visual hierarchy."
-        )
-    if h2_tags and p_tags:
-        feedback.append(
-            "Visual: Ensure <h2> headings are noticeably larger than paragraph text and distinct from <h1>."
-        )
-
-    # 4. Basic spacing/padding
-    #    Checks if any style attribute or rule *mentions* padding or margin for these.
-    common_sections = soup.find_all(
-        ["header", "footer", "main", "section", "article", "aside"]
-    )
-    cards = soup.find_all(
-        lambda tag: "card" in tag.get("class", [])
-    )  # Example: finds class="card"
-
-    elements_to_check_spacing = common_sections + cards
-    if elements_to_check_spacing:
-        missing_spacing_count = 0
-        for elem in elements_to_check_spacing[:3]:  # Check a few samples
-            has_spacing_style = False
-            if elem.get("style") and (
-                "padding:" in elem.get("style") or "margin:" in elem.get("style")
-            ):
-                has_spacing_style = True
-
-            if not has_spacing_style:
-                # Check <style> tags for rules targeting this element's tag name or class
-                for s_tag in style_tags:
-                    if s_tag.string:
-                        # Simplified check for tag name
-                        if f"{elem.name} {{" in s_tag.string and (
-                            "padding:" in s_tag.string or "margin:" in s_tag.string
-                        ):
-                            has_spacing_style = True
-                            break
-                        # Simplified check for class (if any)
-                        for cls in elem.get("class", []):
-                            if f".{cls} {{" in s_tag.string and (
-                                "padding:" in s_tag.string or "margin:" in s_tag.string
-                            ):
-                                has_spacing_style = True
-                                break
-                        if has_spacing_style:
-                            break
-            if not has_spacing_style:
-                missing_spacing_count += 1
-
-        if (
-            missing_spacing_count > 1
-        ):  # If multiple checked elements lack explicit spacing
-            feedback.append(
-                "Visual: Some key sections/blocks might lack sufficient padding/margins. Review spacing."
-            )
-
-    # 5. Image presence
-    if not soup.find_all("img"):
-        feedback.append(
-            "Visual: No images (<img> tags) found. Consider adding images/icons for engagement."
-        )
-
-    # 6. Simplified Contrast Check
-    elements_for_contrast = soup.find_all(["p", "span", "li", "a"] + h1_tags + h2_tags)
-    contrast_issues_found = 0
-    for elem in elements_for_contrast[:10]:  # Check a sample
-        style_str = elem.get("style", "")
-        fg_color_match = re.search(r"color:\\s*([^;]+)", style_str)
-        bg_color_match = re.search(
-            r"(?:background-color|background):\\s*([^;]+)", style_str
-        )
-        if (
-            fg_color_match
-            and bg_color_match
-            and fg_color_match.group(1).strip() == bg_color_match.group(1).strip()
-            and fg_color_match.group(1).strip() not in ["transparent", "inherit"]
-        ):
-            contrast_issues_found += 1
-            break
-    if contrast_issues_found > 0:
-        feedback.append(
-            "Visual: Potential low contrast. Found elements where foreground/background colors might be too similar."
-        )
-
-    # --- Functionality & Accessibility Checks (New) ---
-    # 7. Link validation
-    all_links = soup.find_all("a", href=True)
-    broken_internal_links = 0
-    suspicious_external_links = 0
-    for link_tag in all_links:
-        href = link_tag["href"]
-        if href.startswith("#") and len(href) > 1:
-            target_id = href[1:]
-            if not soup.find(id=target_id):
-                broken_internal_links += 1
-                feedback.append(
-                    f"Link: Internal link '{href}' appears broken (no element with id='{target_id}' found)."
-                )
-        elif href.startswith("http://") or href.startswith("https://"):
-            if (
-                "." not in href.split("://", 1)[-1]
-            ):  # Very basic check for a domain part
-                suspicious_external_links += 1
-                feedback.append(
-                    f"Link: External link '{href}' seems malformed or lacks a domain. (Note: This doesn't check if the link works)."
-                )
-        # mailto:, tel: etc. are ignored for this basic check
-
-    # 8. Button accessibility
-    buttons = soup.find_all("button")
-    buttons_without_text = 0
-    for btn in buttons:
-        btn_text = btn.get_text(strip=True)
-        aria_label = btn.get("aria-label", "").strip()
-        if not btn_text and not aria_label:
-            buttons_without_text += 1
-            feedback.append(
-                f"Accessibility: A <button> element was found without discernible text content or an aria-label. Add one for clarity."
-            )
-            if buttons_without_text >= 2:  # Limit feedback messages for this
-                break
-
-    return feedback
 
 
 def _generate_website_plan(
@@ -643,83 +440,7 @@ def generate_html_llm(
             )  # Cache the last attempt anyway
             return current_html
 
-    # --- Stage 2: Visual Clarity Analysis and Tweaking ---
-    if not validation_errors:  # Proceed only if HTML/CSS is valid
-        for visual_attempt in range(_MAX_VISUAL_TWEAK_ATTEMPTS + 1):
-            if status_callback:
-                status_callback(
-                    f"🎨 Analyzing website quality (Attempt {visual_attempt + 1}/{_MAX_VISUAL_TWEAK_ATTEMPTS + 1})..."
-                )
-
-            quality_feedback = _analyze_website_quality(current_html)
-
-            if not quality_feedback:
-                if status_callback:
-                    status_callback(
-                        "✨ Website quality analysis passed, no immediate suggestions."
-                    )
-                break  # No feedback, so no tweaks needed.
-
-            if (
-                visual_attempt == _MAX_VISUAL_TWEAK_ATTEMPTS
-            ):  # Maxed out visual tweak attempts
-                if status_callback:
-                    status_callback(
-                        f"⚠️ Reached max quality tweak attempts. Using current version. Feedback: {quality_feedback}"
-                    )
-                break
-
-            if status_callback:
-                status_callback(
-                    f"🖌️ Attempting quality tweaks based on {len(quality_feedback)} suggestions..."
-                )
-                status_callback(
-                    f"Suggestions:\\n"
-                    + "\\n".join([f"- {f}" for f in quality_feedback])
-                )
-
-            prompt_quality_tweaks = _SYSTEM_PROMPT_QUALITY_TWEAKS.replace(
-                "{{resume_text}}", raw_text
-            )
-            prompt_quality_tweaks = prompt_quality_tweaks.replace(
-                "{{website_plan}}", website_plan
-            )
-            prompt_quality_tweaks = prompt_quality_tweaks.replace(
-                "{{current_html}}", current_html
-            )
-            prompt_quality_tweaks = prompt_quality_tweaks.replace(
-                "{{quality_feedback}}", "\\n".join(quality_feedback)
-            )
-
-            messages_visual = [
-                {"role": "system", "content": prompt_quality_tweaks},
-                {
-                    "role": "user",
-                    "content": "Refine the HTML based on the quality improvement suggestions provided.",
-                },
-            ]
-
-            rsp_visual = chat(model=_MODEL, messages=messages_visual)
-            raw_output_visual = rsp_visual.message.content
-            tweaked_html = _extract_html(raw_output_visual)
-
-            # Validate the tweaked HTML again (important!)
-            if status_callback:
-                status_callback("🔍 Validating tweaked Website (HTML/CSS)...")
-            validation_errors_after_tweak = _validate_html_css(tweaked_html)
-
-            if not validation_errors_after_tweak:
-                if status_callback:
-                    status_callback("✅ Tweaked Website passed HTML/CSS validation!")
-                current_html = tweaked_html  # Update current_html with the successfully tweaked version
-                break
-            else:
-                if status_callback:
-                    status_callback(
-                        f"⚠️ Tweaked Website failed HTML/CSS validation. Errors: {validation_errors_after_tweak}. Reverting to pre-tweak version for this attempt."
-                    )
-
-    # --- Final Stage: Caching and Returning ---
+    # Cache and return the final HTML
     if status_callback:
         status_callback("💾 Caching final website version.")
     cache_path.write_text(current_html, encoding="utf-8")
