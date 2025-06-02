@@ -47,7 +47,7 @@ def _extract_json(raw: str) -> dict:
         raise
 
 
-def parse_resume_llm(raw_text: str) -> dict:
+def parse_resume_llm(raw_text: str, model: str | None = None) -> dict:
     cache_path = _CACHE_DIR / f"{_sha(raw_text)}.json"
 
     if cache_path.exists():
@@ -57,7 +57,7 @@ def parse_resume_llm(raw_text: str) -> dict:
         {"role": "system", "content": _SYSTEM_PROMPT},
         {"role": "user", "content": raw_text},
     ]
-    rsp = chat(model=_MODEL, messages=messages)
+    rsp = chat(model=model or _MODEL, messages=messages)
     payload = rsp.message.content.strip().strip("`")
     data = _extract_json(payload)
     data = clean_resume(data)

@@ -368,7 +368,9 @@ def _validate_html_css(html_content: str) -> list[str]:
 
 
 def _generate_website_plan(
-    raw_text: str, status_callback: Callable[[str], None] | None = None
+    raw_text: str, 
+    status_callback: Callable[[str], None] | None = None, 
+    model: str | None = None
 ) -> tuple[str | None, bool, str | None]:
     """
     Analyzes resume text, determines if it's a valid resume, and generates a website plan.
@@ -410,7 +412,7 @@ def _generate_website_plan(
         {"role": "system", "content": _SYSTEM_PROMPT_PLAN},
         {"role": "user", "content": raw_text},
     ]
-    rsp = chat(model=_MODEL, messages=messages)
+    rsp = chat(model=model or _MODEL, messages=messages)
     plan_output = rsp.message.content.strip()
 
     # Save the raw output to cache
@@ -420,19 +422,10 @@ def _generate_website_plan(
     is_resume = "IS_RESUME: TRUE" in is_resume_line
 
     if is_resume:
-        # Ensure "PLAN:" exists before splitting
-        if 1 == 1:
-            plan_content = plan_output.split("PLAN:", 1)[1].strip()
-            if status_callback:
-                status_callback(
-                    f"📝 Plan generated successfully."
-                )  # Simplified message for brevity in status
-        else:
-            plan_content = "Plan generation succeeded, but plan details are not in the expected format."
-            if status_callback:
-                status_callback(
-                    f"⚠️ Plan generated, but details might be missing from output."
-                )
+        # For a valid resume, return the plan content after "IS_RESUME: TRUE"
+        plan_content = plan_output.strip()
+        if status_callback:
+            status_callback("📝 Plan generated successfully.")
         return plan_content, True, None
     else:
         # Ensure "REASON:" exists before splitting
@@ -446,7 +439,9 @@ def _generate_website_plan(
 
 
 def generate_html_llm(
-    raw_text: str, status_callback: Callable[[str], None] | None = None
+    raw_text: str, 
+    status_callback: Callable[[str], None] | None = None,
+    model: str | None = None
 ) -> str:
     """
     Generates a full HTML website directly from raw resume text using an LLM,
@@ -455,9 +450,8 @@ def generate_html_llm(
     Args:
         raw_text: The raw text from the resume.
         status_callback: An optional function to call with status updates.
-    """
-    # Step 1: Generate/retrieve website plan
-    website_plan, is_resume, reason = _generate_website_plan(raw_text, status_callback)
+    """    # Step 1: Generate/retrieve website plan
+    website_plan, is_resume, reason = _generate_website_plan(raw_text, status_callback, model)
 
     if not is_resume:
         error_message = (
@@ -530,14 +524,13 @@ def generate_html_llm(
             prompt_fix = prompt_fix.replace("{{errors}}", "\\n".join(last_errors))
 
             messages = [
-                {"role": "system", "content": prompt_fix},
-                {
+                {"role": "system", "content": prompt_fix},                {
                     "role": "user",
                     "content": "Fix the provided HTML based on the errors.",
                 },  # Simplified user message
             ]
 
-        rsp = chat(model=_MODEL, messages=messages)
+        rsp = chat(model=model or _MODEL, messages=messages)
         raw_output = rsp.message.content
         current_html = _extract_html(raw_output)
 
@@ -586,7 +579,8 @@ def apply_user_changes_llm(
     user_request: str,
     resume_text: str = "",
     website_plan: str = "",
-    status_callback: Callable[[str], None] | None = None
+    status_callback: Callable[[str], None] | None = None,
+    model: str | None = None
 ) -> str:
     """
     Applies user-requested changes to the current website HTML using an LLM.
@@ -622,7 +616,7 @@ def apply_user_changes_llm(
         status_callback("🤖 Calling LLM to apply changes...")
 
     try:
-        rsp = chat(model=_MODEL, messages=messages)
+        rsp = chat(model=model or _MODEL, messages=messages)
         raw_output = rsp.message.content
         modified_html = _extract_html(raw_output)
 

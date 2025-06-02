@@ -17,9 +17,23 @@ from generator_llm import generate_html_llm, apply_user_changes_llm
 from generator_rule import json_to_html
 from parser_rule import parse_resume_rule
 from temp_server import serve_html_temporarily, cleanup_temp_server
+from llm_client import get_llm_client
 
 # Register cleanup function to run when Streamlit exits
 atexit.register(cleanup_temp_server)
+
+def get_current_model() -> str:
+    """Get the currently selected model from session state"""
+    provider = st.session_state.selected_provider
+    model = st.session_state.selected_model
+    
+    # Format the model for the LLM client
+    if provider == "OpenAI":
+        return model
+    elif provider == "Ollama":
+        return model
+    else:
+        return model  # Fallback to direct model name
 
 # Add session-based cleanup for Streamlit
 @st.cache_resource
@@ -60,6 +74,10 @@ if "display_html" not in st.session_state:
     st.session_state.display_html = False
 if "selected_mode" not in st.session_state:
     st.session_state.selected_mode = "AI Direct Build (Custom design & layout)"
+if "selected_provider" not in st.session_state:
+    st.session_state.selected_provider = "OpenAI"
+if "selected_model" not in st.session_state:
+    st.session_state.selected_model = "gpt-4o-mini"
 if "raw_text" not in st.session_state:
     st.session_state.raw_text = None
 if "website_plan" not in st.session_state:
@@ -84,6 +102,84 @@ if "quick_action_pending" not in st.session_state:
 # Simple title with default Streamlit styling
 st.title("📄 → 🌐 Résumé-to-Site")
 st.markdown("Transform your PDF résumé into a stunning personal website")
+
+# --- LLM PROVIDER AND MODEL SELECTION ---
+st.markdown("### 🤖 AI Model Configuration")
+
+# Available models for each provider
+MODEL_OPTIONS = {
+    "OpenAI": [
+        "gpt-4o",
+        "gpt-4o-mini", 
+        "gpt-4-turbo",
+        "gpt-3.5-turbo"
+    ],
+    "Ollama": [
+        "deepseek-coder-v2",
+        "llama3.1:8b",
+        "llama3.1:70b",
+        "codellama:7b",
+        "codellama:13b",
+        "qwen2.5-coder:7b",
+        "qwen2.5-coder:14b",
+        "mistral:7b",
+        "phi3:3.8b"
+    ]
+}
+
+col_provider, col_model = st.columns([1, 2])
+
+with col_provider:
+    provider = st.selectbox(
+        "Provider",
+        options=list(MODEL_OPTIONS.keys()),
+        index=list(MODEL_OPTIONS.keys()).index(st.session_state.selected_provider),
+        key="provider_select",
+        help="Choose between OpenAI API or local Ollama models"
+    )
+
+with col_model:
+    # Update available models when provider changes
+    if provider != st.session_state.selected_provider:
+        st.session_state.selected_provider = provider
+        # Reset to first model of new provider
+        st.session_state.selected_model = MODEL_OPTIONS[provider][0]
+    
+    model = st.selectbox(
+        "Model",
+        options=MODEL_OPTIONS[provider],
+        index=MODEL_OPTIONS[provider].index(st.session_state.selected_model) if st.session_state.selected_model in MODEL_OPTIONS[provider] else 0,
+        key="model_select",
+        help=f"Select the {'OpenAI' if provider == 'OpenAI' else 'Ollama'} model to use for generation"
+    )
+
+# Update session state
+st.session_state.selected_provider = provider
+st.session_state.selected_model = model
+
+# Show model info
+if provider == "OpenAI":
+    if model == "gpt-4o":
+        st.info("🚀 **GPT-4o**: Most capable, best for complex websites with advanced features")
+    elif model == "gpt-4o-mini":
+        st.info("⚡ **GPT-4o Mini**: Fast and cost-effective, great for most resume websites")
+    elif model == "gpt-4-turbo":
+        st.info("🎯 **GPT-4 Turbo**: Excellent balance of capability and speed")
+    else:
+        st.info("💡 **GPT-3.5 Turbo**: Budget-friendly option for simple websites")
+else:
+    if "deepseek" in model.lower():
+        st.info("🔥 **DeepSeek Coder**: Specialized coding model, excellent for web development")
+    elif "llama" in model.lower():
+        st.info("🦙 **Llama**: Open-source general purpose model")
+    elif "codellama" in model.lower():
+        st.info("💻 **Code Llama**: Meta's specialized coding model")
+    elif "qwen" in model.lower():
+        st.info("🌟 **Qwen Coder**: Alibaba's powerful coding model")
+    else:
+        st.info(f"🤖 **{model.title()}**: {provider} local model")
+
+st.divider()
 
 # Comprehensive dark theme CSS - NO WHITE BACKGROUNDS ANYWHERE
 st.markdown("""
@@ -379,7 +475,9 @@ def trigger_website_generation():
 
             try:
                 html_output = generate_html_llm(
-                    st.session_state.raw_text, status_callback=status_update_callback
+                    st.session_state.raw_text, 
+                    status_callback=status_update_callback,
+                    model=get_current_model()
                 )
                 st.session_state.generated_html = html_output
                 st.session_state.display_html = True
@@ -415,8 +513,9 @@ def trigger_website_generation():
 
     elif st.session_state.selected_mode == "AI Structured (Parsed data + Template)":
         st.subheader("📊 Structured Data + Professional Template")
+        
         with st.spinner("🔍 Analyzing resume structure with AI..."):
-            parsed_json = parse_resume_llm(st.session_state.raw_text)
+            parsed_json = parse_resume_llm(st.session_state.raw_text, model=get_current_model())
         st.success("✅ Resume data extracted and structured.")
         st.json(parsed_json)
         with st.spinner("🏗️ Building website from structured data..."):
@@ -700,14 +799,14 @@ if st.session_state.display_html and st.session_state.generated_html:
             success = False
             error_msg = None
             
-            try:
-                # Apply the user's requested changes
+            try:                # Apply the user's requested changes
                 modified_html = apply_user_changes_llm(
                     current_html=st.session_state.generated_html,
                     user_request=user_input,
                     resume_text=st.session_state.raw_text or "",
                     website_plan=st.session_state.website_plan,
-                    status_callback=status_callback
+                    status_callback=status_callback,
+                    model=get_current_model()
                 )
                 
                 # Check if successful
