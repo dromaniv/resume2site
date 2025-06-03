@@ -44,15 +44,15 @@ class TempHTMLServer:
                 super().__init__(*args, directory=directory or self.temp_dir, **kwargs)
         
         # Create server without changing working directory
-        self.server = HTTPServer(('localhost', self.port), 
+        self.server = HTTPServer(('0.0.0.0', self.port),
                                 lambda *args: CustomHandler(*args, directory=self.temp_dir))
         
         # Start server in background thread
         self.server_thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.server_thread.start()
         self.is_running = True
-        
-        return f"http://localhost:{self.port}/{filename}"
+        local_ip = self._get_local_ip()
+        return f"Local URL: http://localhost:{self.port}/{filename}\nNetwork URL: http://{local_ip}:{self.port}/{filename}"
 
     def stop_server(self):
         """Stop the temporary server and clean up resources"""
@@ -122,6 +122,19 @@ class TempHTMLServer:
             s.listen(1)
             port = s.getsockname()[1]
         return port
+
+    def _get_local_ip(self):
+        """Get the local network IP address of the machine."""
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            # Doesn't have to be reachable
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+        except Exception:
+            ip = "127.0.0.1"
+        finally:
+            s.close()
+        return ip
 
     def __del__(self):
         """Cleanup when object is destroyed"""

@@ -86,6 +86,10 @@ if "chat_messages" not in st.session_state:
     st.session_state.chat_messages = []
 if "temp_server_url" not in st.session_state:
     st.session_state.temp_server_url = None
+if "temp_server_local_url" not in st.session_state:
+    st.session_state.temp_server_local_url = None
+if "temp_server_network_url" not in st.session_state:
+    st.session_state.temp_server_network_url = None
 # Tracks the name of the PDF currently in the uploader widget
 if "current_uploader_pdf_name" not in st.session_state:
     st.session_state.current_uploader_pdf_name = None
@@ -438,12 +442,24 @@ def reset_generation_output_state():
     st.session_state.website_plan = ""
     st.session_state.chat_messages = []
     st.session_state.temp_server_url = None
+    st.session_state.temp_server_local_url = None
+    st.session_state.temp_server_network_url = None
     # Clear change summary state
     st.session_state.pending_change_summary = None
     st.session_state.original_html_backup = None
     st.session_state.change_user_request = None
     cleanup_temp_server()  # Clean up any running temp server
 
+def parse_server_urls(urls_string):
+    """Parse the Local and Network URLs from the server's return string."""
+    local_url = None
+    network_url = None
+    for line in urls_string.splitlines():
+        if line.startswith("Local URL:"):
+            local_url = line.split("Local URL:", 1)[1].strip()
+        elif line.startswith("Network URL:"):
+            network_url = line.split("Network URL:", 1)[1].strip()
+    return network_url or local_url, local_url
 
 # --- Generation Logic ---
 def trigger_website_generation():
@@ -501,7 +517,10 @@ def trigger_website_generation():
                 ):
                     try:
                         url = serve_html_temporarily(html_output)
-                        st.session_state.temp_server_url = url
+                        network_url, local_url = parse_server_urls(url)
+                        st.session_state.temp_server_url = network_url or local_url
+                        st.session_state.temp_server_local_url = local_url
+                        st.session_state.temp_server_network_url = network_url
                     except Exception as e:
                         st.warning(f"Could not start preview server: {e}")
                     
@@ -537,7 +556,10 @@ def trigger_website_generation():
         # Auto-start server when website is generated
         try:
             url = serve_html_temporarily(html_output)
-            st.session_state.temp_server_url = url
+            network_url, local_url = parse_server_urls(url)
+            st.session_state.temp_server_url = network_url or local_url
+            st.session_state.temp_server_local_url = local_url
+            st.session_state.temp_server_network_url = network_url
         except Exception as e:
             st.warning(f"Could not start preview server: {e}")
             
@@ -557,7 +579,10 @@ def trigger_website_generation():
         # Auto-start server when website is generated
         try:
             url = serve_html_temporarily(html_output)
-            st.session_state.temp_server_url = url
+            network_url, local_url = parse_server_urls(url)
+            st.session_state.temp_server_url = network_url or local_url
+            st.session_state.temp_server_local_url = local_url
+            st.session_state.temp_server_network_url = network_url
         except Exception as e:
             st.warning(f"Could not start preview server: {e}")
             
@@ -731,15 +756,16 @@ if st.session_state.display_html and st.session_state.generated_html:
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        # Direct link button since server starts automatically
-        if st.session_state.temp_server_url:
-            st.link_button("🌐 Open New Tab", st.session_state.temp_server_url, use_container_width=True)
+        # Prefer network URL, fallback to local
+        url_to_open = st.session_state.get("temp_server_network_url") or st.session_state.get("temp_server_local_url")
+        if url_to_open:
+            st.link_button("🌐 Open New Tab", url_to_open, use_container_width=True)
         else:
             st.button("🌐 New Tab", disabled=True, help="Server starting...", use_container_width=True)
     
     with col2:
-        if st.session_state.temp_server_url:
-            # URL display styled to match buttons
+        if url_to_open:
+            # Use a unique key for the copy-to-clipboard button
             st.markdown(f"""
             <div style="
                 background: linear-gradient(90deg, #2d2d2d 0%, #444 100%);
@@ -760,13 +786,14 @@ if st.session_state.display_html and st.session_state.generated_html:
                 justify-content: center;
                 box-shadow: 0 2px 4px rgba(0,0,0,0.3);
                 transition: all 0.3s ease;
-                cursor: pointer;
-            " title="{st.session_state.temp_server_url}" onclick="navigator.clipboard.writeText('{st.session_state.temp_server_url}')">
-                📋 {st.session_state.temp_server_url}
+                cursor: pointer;"
+                title=\"Click to copy URL\"
+                onclick=\"navigator.clipboard.writeText('" + url_to_open + "')\">
+                📋 {url_to_open}
             </div>
             """, unsafe_allow_html=True)
         else:
-            st.empty()  # Placeholder when no URL is available
+            st.markdown("<div style='height:38px'></div>", unsafe_allow_html=True)
 
     with col3:
         st.download_button(
@@ -994,7 +1021,10 @@ if st.session_state.display_html and st.session_state.generated_html:
                     # Update server with original HTML
                     try:
                         url = serve_html_temporarily(st.session_state.original_html_backup)
-                        st.session_state.temp_server_url = url
+                        network_url, local_url = parse_server_urls(url)
+                        st.session_state.temp_server_url = network_url or local_url
+                        st.session_state.temp_server_local_url = local_url
+                        st.session_state.temp_server_network_url = network_url
                     except Exception as e:
                         st.warning(f"Could not update preview server: {e}")
                 
@@ -1083,7 +1113,10 @@ if st.session_state.display_html and st.session_state.generated_html:
                       # Update server with new HTML content
                     try:
                         url = serve_html_temporarily(modified_html)
-                        st.session_state.temp_server_url = url
+                        network_url, local_url = parse_server_urls(url)
+                        st.session_state.temp_server_url = network_url or local_url
+                        st.session_state.temp_server_local_url = local_url
+                        st.session_state.temp_server_network_url = network_url
                     except Exception as e:
                         st.warning(f"Could not update preview server: {e}")
                     
