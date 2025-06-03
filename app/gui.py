@@ -552,6 +552,88 @@ def trigger_website_generation():
             
         st.success("✅ Website assembled using pattern-based extraction.")
 
+def get_available_sections():
+    """Extract available sections dynamically from the website plan and HTML"""
+    sections = []
+    
+    # Try to extract from website plan first (more reliable)
+    if hasattr(st.session_state, 'website_plan') and st.session_state.website_plan:
+        plan_text = st.session_state.website_plan
+        
+        # Try to parse YAML-like structure first
+        import re
+        
+        # Look for YAML section structure: "- name: SectionName"
+        yaml_sections = re.findall(r'- name:\s*([^\n]+)', plan_text, re.IGNORECASE)
+        if yaml_sections:
+            for section_name in yaml_sections:
+                section_clean = section_name.strip().lower()
+                if section_clean not in sections:
+                    sections.append(section_clean)
+        
+        # If no YAML structure found, look for common section patterns
+        if not sections:
+            plan_text_lower = plan_text.lower()
+            section_patterns = {
+                'home': ['home', 'landing', 'hero', 'intro'],
+                'about': ['about', 'summary', 'profile', 'bio'],
+                'experience': ['experience', 'work', 'employment', 'career', 'jobs'],
+                'education': ['education', 'academic', 'university', 'degree', 'school'],
+                'skills': ['skills', 'technical', 'competencies', 'abilities'],
+                'projects': ['projects', 'portfolio', 'work samples', 'demos'],
+                'contact': ['contact', 'reach', 'get in touch', 'email', 'phone']
+            }
+            
+            for section_key, keywords in section_patterns.items():
+                if any(keyword in plan_text_lower for keyword in keywords):
+                    sections.append(section_key)
+    
+    # Fallback: try to extract from HTML if available
+    if not sections and hasattr(st.session_state, 'generated_html') and st.session_state.generated_html:
+        import re
+        html_content = st.session_state.generated_html.lower()
+        
+        # Look for section IDs in the HTML
+        section_id_matches = re.findall(r'id=["\']([^"\']*)["\']', html_content)
+        common_sections = ['home', 'about', 'experience', 'education', 'skills', 'projects', 'contact']
+        
+        for section_id in section_id_matches:
+            for common_section in common_sections:
+                if common_section in section_id:
+                    if common_section not in sections:
+                        sections.append(common_section)
+        
+        # Also look for h2/h3 section headings
+        heading_matches = re.findall(r'<h[23][^>]*>([^<]+)</h[23]>', html_content)
+        for heading in heading_matches:
+            heading_clean = heading.strip().lower()
+            for common_section in common_sections:
+                if common_section in heading_clean and common_section not in sections:
+                    sections.append(common_section)
+    
+    # If still no sections found, provide defaults
+    if not sections:
+        sections = ['about', 'experience', 'education', 'skills', 'projects', 'contact']
+    
+    # Create section options with descriptions
+    section_descriptions = {
+        'home': 'Enhance the landing/hero section with better presentation',
+        'about': 'Expand professional summary and personal introduction',
+        'experience': 'Add more details about roles and responsibilities', 
+        'education': 'Expand on academic achievements and coursework',
+        'skills': 'Elaborate on technical and soft skills with context',
+        'projects': 'Add more depth to project descriptions and outcomes',
+        'contact': 'Improve contact section presentation and accessibility'
+    }
+    
+    # Format sections for display
+    formatted_sections = []
+    for section in sections:
+        section_title = section.replace('_', ' ').title()
+        description = section_descriptions.get(section, f'Enhance the {section} section with additional details')
+        formatted_sections.append(f"{section_title} - {description}")
+    
+    return formatted_sections
 
 # --- UI Elements & Main Control Logic ---
 def on_mode_selection_change_callback():
@@ -719,9 +801,9 @@ if st.session_state.display_html and st.session_state.generated_html:
     st.markdown("Tell the AI how to improve your website's design, content, or functionality:")
     
     # Create a clean chat interface
-    with st.container():
-        # Enhanced quick actions at the top of chat panel
+    with st.container():        # Enhanced quick actions at the top of chat panel
         with st.expander("⚡ One-Click Enhancements", expanded=False):
+            # First row of quick actions
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
@@ -743,6 +825,112 @@ if st.session_state.display_html and st.session_state.generated_html:
                 if st.button("🔤 Typography Upgrade", use_container_width=True, key="quick_fonts", help="Enhance fonts and text styling"):
                     st.session_state.quick_action_pending = "Improve typography by using modern Google Fonts like Inter or Roboto, creating better text hierarchy, and adding proper spacing between elements."
                     st.rerun()
+            
+            # Second row of quick actions
+            st.markdown("<br>", unsafe_allow_html=True)
+            col5, col6, col7, col8 = st.columns(4)
+            
+            with col5:
+                if st.button("🚀 Content Enhancement", use_container_width=True, key="quick_content", help="Intelligently expand project descriptions and add professional details"):
+                    st.session_state.quick_action_pending = "**IMPORTANT: This feature adds AI-generated content to showcase website capabilities - content may not be factually accurate and should be reviewed.** \n\nEnhance the existing content by expanding project descriptions with realistic technical details, adding implementation specifics, outcome metrics, and professional context. Focus on expanding the Projects and Experience sections with plausible industry-standard details while maintaining professional tone. Add specific technologies, methodologies, and quantifiable results where appropriate."
+                    st.rerun()            
+            
+            with col6:
+                if st.button("🔎 Expand Chosen Section", use_container_width=True, key="quick_expand", help="Choose and expand a specific section using only CV information"):
+                    # Set flag to show section selector
+                    st.session_state.show_section_selector = True
+                    st.rerun()
+            
+            with col7:
+                if st.button("🎯 SEO Enhancement", use_container_width=True, key="quick_seo", help="Add SEO meta tags and improve discoverability"):
+                    st.session_state.quick_action_pending = "Improve SEO by adding proper meta descriptions, Open Graph tags, structured data markup, and optimizing heading hierarchy for better search engine visibility."
+                    st.rerun()
+            
+            with col8:
+                if st.button("🎭 Website Personality", use_container_width=True, key="quick_personality", help="Apply creative themes and personality to your website"):
+                    # Set flag to show personality selector
+                    st.session_state.show_personality_selector = True
+                    st.rerun()
+        
+        # Section selector modal (appears when expand chosen section is clicked)
+        if getattr(st.session_state, 'show_section_selector', False):
+            st.markdown("---")
+            st.markdown("**🔎 Choose Section to Expand**")
+            st.markdown("*This will expand the selected section using only information from your original CV*")
+            
+            # Get available sections dynamically
+            section_options = get_available_sections()
+            
+            if not section_options:
+                st.warning("No sections detected in your website. Please generate a website first.")
+                st.session_state.show_section_selector = False
+                st.rerun()
+            
+            col_select, col_apply, col_cancel = st.columns([3, 1, 1])
+            
+            with col_select:
+                selected_section = st.selectbox(
+                    "Select section to expand:",
+                    section_options,
+                    key="section_to_expand"
+                )
+            
+            with col_apply:
+                if st.button("✅ Apply", key="apply_section_expand", type="primary"):
+                    section_name = selected_section.split(" - ")[0]
+                    description = selected_section.split(" - ")[1]
+                    
+                    st.session_state.quick_action_pending = f"Focus ONLY on the {section_name} section. {description}. Use ONLY information that was present in the original CV/resume text. Do not add any fictional or assumed information. Expand and enhance the presentation of existing details, improve formatting, and make the content more readable and professional. If the section has limited information in the original CV, work with what's available and improve its presentation rather than adding new content."                  
+                    st.session_state.show_section_selector = False
+                    st.rerun()
+            
+            with col_cancel:
+                if st.button("❌ Cancel", key="cancel_section_expand"):
+                    st.session_state.show_section_selector = False
+                    st.rerun()
+            
+            st.markdown("---")
+        
+        # Personality selector modal (appears when website personality is clicked)
+        if getattr(st.session_state, 'show_personality_selector', False):
+            st.markdown("---")
+            st.markdown("**🎭 Choose Website Personality**")
+            st.markdown("*Transform your website with a distinctive design theme and personality*")
+            
+            # Define personality options
+            personality_options = [
+                "Creative & Bold - Transform the website with vibrant colors, creative layouts, unique typography, and artistic elements that showcase creativity and innovation.",
+                "Corporate & Executive - Apply a sophisticated corporate design with premium colors, executive-level typography, professional spacing, and business-focused elements.",
+                "Tech & Modern - Implement a sleek tech aesthetic with dark themes, neon accents, code-inspired fonts, and futuristic design elements.",
+                "Minimalist & Clean - Create an ultra-clean minimal design with lots of white space, simple typography, subtle colors, and focus on content clarity.",
+                "Warm & Approachable - Design with warm colors, friendly typography, rounded elements, and inviting design that feels personal and accessible."
+            ]
+            
+            col_select, col_apply, col_cancel = st.columns([3, 1, 1])
+            
+            with col_select:
+                selected_personality = st.selectbox(
+                    "Select personality style:",
+                    personality_options,
+                    key="personality_to_apply"
+                )
+            
+            with col_apply:
+                if st.button("✅ Apply", key="apply_personality", type="primary"):
+                    personality_name = selected_personality.split(" - ")[0]
+                    description = selected_personality.split(" - ")[1]
+                    
+                    st.session_state.quick_action_pending = f"{personality_name}: {description}"
+                    st.session_state.show_personality_selector = False
+                    st.rerun()
+            
+            with col_cancel:
+                if st.button("❌ Cancel", key="cancel_personality"):
+                    st.session_state.show_personality_selector = False
+                    st.rerun()
+            
+            st.markdown("---")
+            
         
         # Chat history
         if st.session_state.chat_messages:
