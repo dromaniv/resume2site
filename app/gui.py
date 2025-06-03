@@ -13,7 +13,7 @@ import atexit
 
 from extractor import pdf_to_text
 from parser_llm import parse_resume_llm
-from generator_llm import generate_html_llm, apply_user_changes_llm
+from generator_llm import generate_html_llm, apply_user_changes_llm, summarize_html_changes_llm
 from generator_rule import json_to_html
 from parser_rule import parse_resume_rule
 from temp_server import serve_html_temporarily, cleanup_temp_server
@@ -98,6 +98,13 @@ if "mode_changed_flag" not in st.session_state:
 # Pending quick action text to be processed in next render cycle
 if "quick_action_pending" not in st.session_state:
     st.session_state.quick_action_pending = None
+# Change summary system variables
+if "pending_change_summary" not in st.session_state:
+    st.session_state.pending_change_summary = None
+if "original_html_backup" not in st.session_state:
+    st.session_state.original_html_backup = None
+if "change_user_request" not in st.session_state:
+    st.session_state.change_user_request = None
 
 # Simple title with default Streamlit styling
 st.title("📄 → 🌐 Résumé-to-Site")
@@ -431,6 +438,10 @@ def reset_generation_output_state():
     st.session_state.website_plan = ""
     st.session_state.chat_messages = []
     st.session_state.temp_server_url = None
+    # Clear change summary state
+    st.session_state.pending_change_summary = None
+    st.session_state.original_html_backup = None
+    st.session_state.change_user_request = None
     cleanup_temp_server()  # Clean up any running temp server
 
 
@@ -931,8 +942,7 @@ if st.session_state.display_html and st.session_state.generated_html:
             
             st.markdown("---")
             
-        
-        # Chat history
+          # Chat history
         if st.session_state.chat_messages:
             st.markdown("**🔄 Refinement History:**")
             
@@ -946,6 +956,61 @@ if st.session_state.display_html and st.session_state.generated_html:
         else:
             st.markdown("**🎯 Ready to improve your website?**")
             st.markdown("Use the input below or select a quick enhancement option above!")
+    
+    # Change Summary Review Section
+    if st.session_state.pending_change_summary:
+        st.markdown("---")
+        st.markdown("### 📋 Change Summary")
+        st.markdown(f"**Your request:** {st.session_state.change_user_request}")
+        
+        # Display the LLM-generated change summary
+        with st.container():
+            st.markdown("**Changes made:**")
+            st.markdown(st.session_state.pending_change_summary)
+          # Accept/Discard buttons
+        col_accept, col_discard = st.columns(2)
+        
+        with col_accept:
+            if st.button("✅ Accept Changes", type="primary", use_container_width=True, key="accept_changes"):
+                # Add success message to chat first
+                st.session_state.chat_messages.append({
+                    "role": "assistant", 
+                    "content": "✅ Changes accepted! Your website has been updated successfully."
+                })
+                
+                # Clear change summary data (finalize the changes)
+                st.session_state.pending_change_summary = None
+                st.session_state.original_html_backup = None
+                st.session_state.change_user_request = None
+                
+                st.rerun()
+        
+        with col_discard:
+            if st.button("❌ Discard Changes", type="secondary", use_container_width=True, key="discard_changes"):
+                # Revert to original HTML
+                if st.session_state.original_html_backup:
+                    st.session_state.generated_html = st.session_state.original_html_backup
+                    
+                    # Update server with original HTML
+                    try:
+                        url = serve_html_temporarily(st.session_state.original_html_backup)
+                        st.session_state.temp_server_url = url
+                    except Exception as e:
+                        st.warning(f"Could not update preview server: {e}")
+                
+                # Clear change summary data
+                st.session_state.pending_change_summary = None
+                st.session_state.original_html_backup = None
+                st.session_state.change_user_request = None
+                
+                # Add revert message to chat
+                st.session_state.chat_messages.append({
+                    "role": "assistant", 
+                    "content": "🔄 Changes discarded. Your website has been reverted to the previous version."
+                })
+                st.rerun()
+        
+        st.markdown("---")
     
     # Chat input area with integrated clear button
     col_input, col_clear = st.columns([5, 1])
@@ -973,8 +1038,7 @@ if st.session_state.display_html and st.session_state.generated_html:
         
         # Add user message to chat history
         st.session_state.chat_messages.append({"role": "user", "content": user_input})
-        
-        # Show user message
+          # Show user message
         with st.chat_message("user"):
             st.write(user_input)
         
@@ -987,7 +1051,11 @@ if st.session_state.display_html and st.session_state.generated_html:
             success = False
             error_msg = None
             
-            try:                # Apply the user's requested changes
+            try:
+                # Cache original HTML before applying changes
+                original_html = st.session_state.generated_html
+                
+                # Apply the user's requested changes
                 modified_html = apply_user_changes_llm(
                     current_html=st.session_state.generated_html,
                     user_request=user_input,
@@ -999,17 +1067,28 @@ if st.session_state.display_html and st.session_state.generated_html:
                 
                 # Check if successful
                 if modified_html and len(modified_html) > 100:
-                    st.session_state.generated_html = modified_html
+                    # Generate change summary using LLM
+                    status_callback("📝 Generating change summary...")
+                    change_summary = summarize_html_changes_llm(
+                        old_html=original_html,
+                        new_html=modified_html,
+                        model=get_current_model()
+                    )
                     
-                    # Update server with new HTML content
+                    # Store change information for review
+                    st.session_state.original_html_backup = original_html
+                    st.session_state.pending_change_summary = change_summary
+                    st.session_state.change_user_request = user_input
+                    st.session_state.generated_html = modified_html
+                      # Update server with new HTML content
                     try:
                         url = serve_html_temporarily(modified_html)
                         st.session_state.temp_server_url = url
                     except Exception as e:
                         st.warning(f"Could not update preview server: {e}")
                     
-                    assistant_response = "✅ Improvements applied successfully! Check the updated preview above."
-                    status.update(label="✅ Complete!", state="complete")
+                    assistant_response = "✅ Changes applied! Please review the summary below and accept or discard the changes."
+                    status.update(label="✅ Changes Ready for Review", state="complete")
                     success = True
                 else:
                     assistant_response = "⚠️ Could not apply improvements properly. Please try rephrasing your request or be more specific."
@@ -1022,18 +1101,21 @@ if st.session_state.display_html and st.session_state.generated_html:
                 status.update(label="❌ Error", state="error")
                 success = False
             
-            # Add assistant response
-            st.session_state.chat_messages.append({"role": "assistant", "content": assistant_response})
-            
-            # Show assistant response
-            with st.chat_message("assistant"):
-                if success:
-                    st.success(assistant_response)
-                else:
-                    if error_msg:
-                        st.error(assistant_response)
+            # Only add assistant response immediately if there's no pending change summary
+            # (For successful changes with summaries, response is added when user accepts/discards)
+            if not st.session_state.pending_change_summary:
+                # Add assistant response
+                st.session_state.chat_messages.append({"role": "assistant", "content": assistant_response})
+                
+                # Show assistant response
+                with st.chat_message("assistant"):
+                    if success:
+                        st.success(assistant_response)
                     else:
-                        st.warning(assistant_response)
+                        if error_msg:
+                            st.error(assistant_response)
+                        else:
+                            st.warning(assistant_response)
         
         # Rerun to refresh
         st.rerun()

@@ -279,7 +279,6 @@ If you cannot implement a specific feature due to complexity, make a simpler ver
 """
 )
 
-
 def _extract_html(raw_html_output: str) -> str:
     """
     Extracts HTML content from the LLM's raw output.
@@ -643,3 +642,143 @@ def apply_user_changes_llm(
             status_callback(f"❌ {error_msg}")
         print(error_msg)
         return current_html  # Return original HTML if changes failed
+
+def summarize_html_changes_llm(old_html: str, new_html: str, model: str | None = None) -> str:
+    """
+    Use LLM to analyze and summarize the major changes between two HTML versions.
+    
+    Args:
+        old_html: The original HTML content
+        new_html: The modified HTML content  
+        model: The LLM model to use (optional)
+        
+    Returns:
+        A natural language summary of the changes made
+    """
+    
+    # Extract key differences for analysis
+    def extract_key_info(html_content: str) -> dict:
+        """Extract key information from HTML for comparison"""
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # Extract text content by sections
+            sections = {}
+            for header in soup.find_all(['h1', 'h2', 'h3', 'h4']):
+                section_name = header.get_text().strip()
+                # Get content until next header of same or higher level
+                content = []
+                for sibling in header.find_next_siblings():
+                    if sibling.name in ['h1', 'h2', 'h3', 'h4']:
+                        break
+                    if sibling.get_text().strip():
+                        content.append(sibling.get_text().strip())
+                sections[section_name] = ' '.join(content)[:200]  # Limit length
+                
+            # Extract styling info
+            style_tags = soup.find_all('style')
+            css_content = ' '.join([tag.get_text() for tag in style_tags])
+            
+            # Look for key CSS properties
+            colors = re.findall(r'color:\s*([^;]+)', css_content)
+            backgrounds = re.findall(r'background[^:]*:\s*([^;]+)', css_content)
+            fonts = re.findall(r'font-family:\s*([^;]+)', css_content)
+            
+            return {
+                'sections': sections,
+                'colors': colors[:5],  # Limit to first 5
+                'backgrounds': backgrounds[:3],
+                'fonts': fonts[:3],
+                'total_length': len(html_content)
+            }
+        except Exception:
+            return {'error': 'Could not parse HTML'}
+    
+    old_info = extract_key_info(old_html)
+    new_info = extract_key_info(new_html)
+    
+    # Create analysis prompt
+    analysis_prompt = f"""
+Analyze the changes between two versions of a resume website and provide a concise summary.
+
+OLD VERSION INFO:
+- Sections: {list(old_info.get('sections', {}).keys())}
+- Colors used: {old_info.get('colors', [])}
+- Fonts: {old_info.get('fonts', [])}
+- Content length: {old_info.get('total_length', 0)} characters
+
+NEW VERSION INFO:  
+- Sections: {list(new_info.get('sections', {}).keys())}
+- Colors used: {new_info.get('colors', [])}
+- Fonts: {new_info.get('fonts', [])}
+- Content length: {new_info.get('total_length', 0)} characters
+
+SECTION CONTENT CHANGES:
+"""
+    
+    # Compare section content
+    old_sections = old_info.get('sections', {})
+    new_sections = new_info.get('sections', {})
+    
+    for section in set(list(old_sections.keys()) + list(new_sections.keys())):
+        old_content = old_sections.get(section, "")
+        new_content = new_sections.get(section, "")
+        
+        if section not in old_sections:
+            analysis_prompt += f"\n+ NEW SECTION '{section}': {new_content[:100]}..."
+        elif section not in new_sections:
+            analysis_prompt += f"\n- REMOVED SECTION '{section}'"
+        elif old_content != new_content:
+            analysis_prompt += f"\n* MODIFIED '{section}': Content changed from {len(old_content)} to {len(new_content)} chars"
+    
+    analysis_prompt += """
+
+Please provide a concise, user-friendly summary of the major changes made. Focus on:
+1. Visual/design changes (colors, fonts, layout)
+2. Content changes (new sections, expanded content, etc.)
+3. Structural improvements (SEO, accessibility, etc.)
+
+Format as bullet points with emojis. Be specific but concise. Example:
+• 🎨 Changed color scheme to professional blue and gray palette
+• 📝 Expanded the Projects section with technical details and metrics
+• 📱 Improved mobile responsiveness with better layout stacking
+• 🔍 Added SEO meta tags for better search visibility
+
+Keep it under 150 words and focus on the most impactful changes.
+"""
+
+    try:
+        messages = [{"role": "user", "content": analysis_prompt}]
+        response = chat(model=model or _MODEL, messages=messages)
+          # Extract content from LLM response
+        summary = response.message.content.strip()
+        
+        # Clean up the response formatting
+        # Handle cases where bullets are formatted as "• - " or similar
+        summary = summary.replace('• - ', '• ')
+        summary = summary.replace('•-', '• ')
+        
+        # Ensure proper line breaks between bullet points
+        if '• ' in summary and '\n' not in summary:
+            # If all bullet points are on one line, split them
+            summary = summary.replace('• ', '\n• ')
+            summary = summary.strip()
+        
+        # Ensure it starts with a bullet point
+        if not summary.startswith('•'):
+            # If response doesn't start with bullet, try to format it
+            lines = summary.split('\n')
+            formatted_lines = []
+            for line in lines:
+                line = line.strip()
+                if line and not line.startswith('•'):
+                    formatted_lines.append(f"• {line}")
+                elif line.startswith('•'):
+                    formatted_lines.append(line)
+            summary = '\n'.join(formatted_lines)
+        
+        return summary if summary else "• ✨ Website has been updated with your requested changes"
+        
+    except Exception as e:
+        print(f"Error summarizing changes: {e}")
+        return "• ✨ Website has been updated with your requested changes"
